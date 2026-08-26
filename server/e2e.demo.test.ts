@@ -49,6 +49,29 @@ describe("Step 2 end-to-end demo flow", () => {
     expect(wallet.ledger.map(entry => entry.type)).toEqual(["DEBIT", "CREDIT"]);
   });
 
+  it("enforces cancellation and expiry transitions", async () => {
+    const caller = appRouter.createCaller(contextFor(7004));
+    await caller.workspace.addDemoCredits({
+      amountMinor: 100000,
+      requestId: "00000000-0000-4000-8000-000000000004",
+    });
+    const activation = await caller.workspace.createSmsRequest({
+      country: "NG",
+      serviceId: "verify",
+    });
+    const cancelled = await caller.workspace.cancelSms({ id: activation.id });
+    expect(cancelled.status).toBe("CANCELLED");
+    await expect(
+      caller.workspace.simulateSms({ id: activation.id })
+    ).rejects.toThrow("Invalid activation state");
+    const inbox = await caller.workspace.createMailInbox({ label: "expiry" });
+    const expired = await caller.workspace.expireInbox({ id: inbox.id });
+    expect(expired.status).toBe("EXPIRED");
+    await expect(
+      caller.workspace.simulateEmail({ id: inbox.id })
+    ).rejects.toThrow("Inbox is expired");
+  });
+
   it("prevents one user from reading another user's activation or inbox", async () => {
     const owner = appRouter.createCaller(contextFor(7002));
     const other = appRouter.createCaller(contextFor(7003));

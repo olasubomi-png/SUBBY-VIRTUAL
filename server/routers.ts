@@ -13,9 +13,11 @@ import { createAuditEvent, type AuditEvent } from "./security";
 import { checkDistributedRateLimit } from "./redis";
 import {
   addDemoCredits,
+  cancelSms,
   createDemoActivation,
   createDemoInbox,
   debitDemoCredits,
+  expireInbox,
   getActivation,
   getDemoWallet,
   getInbox,
@@ -107,15 +109,27 @@ export const appRouter = router({
     smsRequests: protectedProcedure.query(({ ctx }) =>
       listActivations(ctx.user.id)
     ),
+    smsRequestDetail: protectedProcedure
+      .input(z.object({ id: z.string().min(1).max(120) }))
+      .query(({ input, ctx }) => getActivation(ctx.user.id, input.id)),
     simulateSms: protectedProcedure
       .input(z.object({ id: z.string().min(1).max(120) }))
       .mutation(({ input, ctx }) => simulateSms(ctx.user.id, input.id)),
+    cancelSms: protectedProcedure
+      .input(z.object({ id: z.string().min(1).max(120) }))
+      .mutation(({ input, ctx }) => cancelSms(ctx.user.id, input.id)),
     mailInboxes: protectedProcedure.query(({ ctx }) =>
       listInboxes(ctx.user.id)
     ),
+    mailInboxDetail: protectedProcedure
+      .input(z.object({ id: z.string().min(1).max(120) }))
+      .query(({ input, ctx }) => getInbox(ctx.user.id, input.id)),
     simulateEmail: protectedProcedure
       .input(z.object({ id: z.string().min(1).max(120) }))
       .mutation(({ input, ctx }) => simulateEmail(ctx.user.id, input.id)),
+    expireInbox: protectedProcedure
+      .input(z.object({ id: z.string().min(1).max(120) }))
+      .mutation(({ input, ctx }) => expireInbox(ctx.user.id, input.id)),
     smsOptions: protectedProcedure.query(async () => ({
       countries: await sms.getCountries(),
       services: await sms.getServices(),
@@ -315,8 +329,18 @@ export const appRouter = router({
           : auditEvents.slice(-20).reverse(),
       };
     }),
-    activations: adminProcedure.query(() => listAllActivations()),
-    inboxes: adminProcedure.query(() => listAllInboxes()),
+    activations: adminProcedure.query(() =>
+      listAllActivations().map(({ message, ...safe }) => ({
+        ...safe,
+        hasMessage: Boolean(message),
+      }))
+    ),
+    inboxes: adminProcedure.query(() =>
+      listAllInboxes().map(({ messages, ...safe }) => ({
+        ...safe,
+        messageCount: messages.length,
+      }))
+    ),
     walletLedger: adminProcedure.query(() => listAllWallets()),
     auditHistory: adminProcedure
       .input(

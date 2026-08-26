@@ -405,22 +405,55 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
   const [serviceId, setServiceId] = useState("verify");
   const [country, setCountry] = useState("NG");
   const [selectedId, setSelectedId] = useState<string>();
+  const [feedback, setFeedback] = useState<string>();
   const smsOptions = trpc.workspace.smsOptions.useQuery(undefined, {
     enabled: type === "sms",
   });
   const smsRequests = trpc.workspace.smsRequests.useQuery();
   const mailInboxes = trpc.workspace.mailInboxes.useQuery();
+  const smsDetail = trpc.workspace.smsRequestDetail.useQuery(
+    { id: selectedId ?? "" },
+    { enabled: type === "sms" && Boolean(selectedId) }
+  );
+  const mailDetail = trpc.workspace.mailInboxDetail.useQuery(
+    { id: selectedId ?? "" },
+    { enabled: type === "mail" && Boolean(selectedId) }
+  );
   const createSms = trpc.workspace.createSmsRequest.useMutation({
-    onSuccess: () => smsRequests.refetch(),
+    onSuccess: () => {
+      setFeedback("SMS activation created successfully.");
+      smsRequests.refetch();
+    },
   });
   const createMail = trpc.workspace.createMailInbox.useMutation({
-    onSuccess: () => mailInboxes.refetch(),
+    onSuccess: () => {
+      setFeedback("Temporary mailbox created successfully.");
+      mailInboxes.refetch();
+    },
   });
   const simulateSms = trpc.workspace.simulateSms.useMutation({
-    onSuccess: () => smsRequests.refetch(),
+    onSuccess: () => {
+      setFeedback("Simulated SMS received; activation completed.");
+      smsRequests.refetch();
+    },
+  });
+  const cancelSms = trpc.workspace.cancelSms.useMutation({
+    onSuccess: () => {
+      setFeedback("SMS activation cancelled successfully.");
+      smsRequests.refetch();
+    },
   });
   const simulateEmail = trpc.workspace.simulateEmail.useMutation({
-    onSuccess: () => mailInboxes.refetch(),
+    onSuccess: () => {
+      setFeedback("Simulated email received successfully.");
+      mailInboxes.refetch();
+    },
+  });
+  const expireInbox = trpc.workspace.expireInbox.useMutation({
+    onSuccess: () => {
+      setFeedback("Temporary mailbox expired successfully.");
+      mailInboxes.refetch();
+    },
   });
   const items =
     type === "sms" ? (smsRequests.data ?? []) : (mailInboxes.data ?? []);
@@ -436,6 +469,69 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
         <p className="mt-2 text-sm text-slate-400">
           Demo/Test only. No external provider is contacted.
         </p>
+        {feedback && (
+          <p className="mt-3 rounded-lg border border-emerald-400/20 bg-emerald-400/10 p-3 text-xs text-emerald-200">
+            {feedback}
+          </p>
+        )}
+        {(smsRequests.error ||
+          mailInboxes.error ||
+          createSms.error ||
+          createMail.error ||
+          simulateSms.error ||
+          simulateEmail.error ||
+          cancelSms.error ||
+          expireInbox.error) && (
+          <p className="mt-3 rounded-lg border border-rose-400/20 bg-rose-400/10 p-3 text-xs text-rose-200">
+            Action failed:{" "}
+            {
+              (
+                smsRequests.error ||
+                mailInboxes.error ||
+                createSms.error ||
+                createMail.error ||
+                simulateSms.error ||
+                simulateEmail.error ||
+                cancelSms.error ||
+                expireInbox.error
+              )?.message
+            }
+          </p>
+        )}
+        {selectedId && (smsDetail.isLoading || mailDetail.isLoading) && (
+          <p className="mt-3 text-xs text-cyan-200">Loading request details…</p>
+        )}
+        {selectedId && (smsDetail.data || mailDetail.data) && (
+          <div className="mt-3 rounded-xl border border-cyan-300/15 bg-cyan-300/5 p-4 text-xs text-slate-300">
+            <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-cyan-200">
+              Request detail
+            </p>
+            <p>
+              Selected {type === "sms" ? "activation" : "inbox"}:{" "}
+              <span className="font-mono text-cyan-200">{selectedId}</span>
+            </p>
+            <p className="mt-1">
+              Created:{" "}
+              {new Date(
+                (smsDetail.data || mailDetail.data)?.createdAt ?? Date.now()
+              ).toLocaleString()}
+            </p>
+            {(smsDetail.data || mailDetail.data)?.expiresAt && (
+              <p className="mt-1">
+                Expires:{" "}
+                {new Date(
+                  (smsDetail.data || mailDetail.data)?.expiresAt as string
+                ).toLocaleString()}
+              </p>
+            )}
+            <p className="mt-1">
+              Server status{" "}
+              <span className="font-semibold text-white">
+                {(smsDetail.data || mailDetail.data)?.status}
+              </span>
+            </p>
+          </div>
+        )}
       </div>
       <div className="grid gap-5 lg:grid-cols-[360px_1fr]">
         <Card className="border-cyan-300/15 bg-[#10131c] shadow-none">
@@ -518,7 +614,12 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
               items.map((item: any) => (
                 <div
                   key={item.id}
-                  className="rounded-xl border border-white/[0.06] p-4"
+                  className={cn(
+                    "rounded-xl border border-white/[0.06] p-4",
+                    selectedId === item.id &&
+                      "border-cyan-300/30 bg-cyan-300/[0.03]"
+                  )}
+                  onClick={() => setSelectedId(item.id)}
                 >
                   <div className="flex items-center gap-3">
                     <div className="grid h-10 w-10 place-items-center rounded-xl bg-cyan-300/10 text-cyan-300">
@@ -546,22 +647,44 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
                     />
                   </div>
                   {type === "sms" && (
-                    <Button
-                      variant="outline"
-                      className="mt-3 border-white/10 bg-transparent text-xs text-slate-300"
-                      onClick={() => simulateSms.mutate({ id: item.id })}
-                    >
-                      Simulate SMS
-                    </Button>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        className="mt-3 border-white/10 bg-transparent text-xs text-slate-300"
+                        onClick={() => simulateSms.mutate({ id: item.id })}
+                      >
+                        Simulate SMS
+                      </Button>
+                      {item.status === "ACTIVE" && (
+                        <Button
+                          variant="outline"
+                          className="border-white/10 bg-transparent text-xs text-slate-300"
+                          onClick={() => cancelSms.mutate({ id: item.id })}
+                        >
+                          Cancel
+                        </Button>
+                      )}
+                    </div>
                   )}
                   {type === "mail" && (
-                    <Button
-                      variant="outline"
-                      className="mt-3 border-white/10 bg-transparent text-xs text-slate-300"
-                      onClick={() => simulateEmail.mutate({ id: item.id })}
-                    >
-                      Simulate email
-                    </Button>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        className="border-white/10 bg-transparent text-xs text-slate-300"
+                        onClick={() => simulateEmail.mutate({ id: item.id })}
+                      >
+                        Simulate email
+                      </Button>
+                      {item.status === "ACTIVE" && (
+                        <Button
+                          variant="outline"
+                          className="border-white/10 bg-transparent text-xs text-slate-300"
+                          onClick={() => expireInbox.mutate({ id: item.id })}
+                        >
+                          Expire inbox
+                        </Button>
+                      )}
+                    </div>
                   )}
                   {item.message && (
                     <p className="mt-3 rounded-lg bg-emerald-400/10 p-3 text-xs text-emerald-200">
