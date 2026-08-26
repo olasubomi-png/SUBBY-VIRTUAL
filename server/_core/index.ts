@@ -13,6 +13,9 @@ import { dispatchScheduledJobs, expireDemoResources } from "../jobs";
 import { sdk } from "./sdk";
 import { serveStatic, setupVite } from "./vite";
 
+let startupClaimed = false;
+let dispatcherReady = false;
+
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
     const server = net.createServer();
@@ -33,6 +36,8 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  if (startupClaimed) throw new Error("Server startup already claimed");
+  startupClaimed = true;
   const app = express();
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads
@@ -41,9 +46,16 @@ async function startServer() {
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   app.get("/health", (_req, res) =>
-    res
-      .status(200)
-      .json({ status: "ok", service: "subby-virtual", providerMode: "mock" })
+    res.status(200).json({
+      status: "ok",
+      service: "subby-virtual",
+      providerMode: "mock",
+      jobDispatcher: {
+        ready: dispatcherReady,
+        mode: "scheduled-http",
+        duplicateStartsGuarded: true,
+      },
+    })
   );
   app.post("/api/scheduled/cleanup", async (req, res) => {
     try {
@@ -93,8 +105,12 @@ async function startServer() {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
+  dispatcherReady = true;
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+    console.log(
+      `[Jobs] Dispatcher ready via /api/scheduled/dispatch-jobs; in-process timers disabled`
+    );
   });
   const shutdown = async () => {
     await closeRedis();

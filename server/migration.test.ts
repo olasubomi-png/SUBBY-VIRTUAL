@@ -12,7 +12,7 @@ const journal = JSON.parse(
 };
 const snapshot = JSON.parse(
   readFileSync(
-    new URL("../drizzle/meta/0006_snapshot.json", import.meta.url),
+    new URL("../drizzle/meta/0007_snapshot.json", import.meta.url),
     "utf8"
   )
 ) as {
@@ -31,7 +31,7 @@ describe("PostgreSQL migration contract", () => {
     expect(journal.entries.map(entry => entry.idx)).toEqual(
       journal.entries.map((_, index) => index)
     );
-    expect(journal.entries.at(-1)?.tag).toBe("0006_smooth_dust");
+    expect(journal.entries.at(-1)?.tag).toBe("0007_modern_eternals");
   });
 
   it("matches message columns and uses additive unique constraints", () => {
@@ -80,6 +80,8 @@ describe("PostgreSQL migration contract", () => {
         "cancelledAt",
         "lockedAt",
         "lockedBy",
+        "recoveryCount",
+        "lastRecoveredAt",
       ])
     );
     expect(jobsMigration).toContain('CREATE TABLE "jobs"');

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, lt, or, sql } from "drizzle-orm";
 import {
   auditLogs,
   mailMessages,
@@ -964,6 +964,8 @@ function safePersistentJob(row: any) {
     cancelledAt: row.cancelledAt?.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     nextRunAt: row.nextRunAt.toISOString(),
+    recoveryCount: row.recoveryCount ?? 0,
+    lastRecoveredAt: row.lastRecoveredAt?.toISOString(),
   };
 }
 
@@ -976,13 +978,7 @@ export async function createPersistentJob(input: {
 }) {
   const db = await getDb();
   if (!db) throw new Error("DATABASE_URL is not configured");
-  const inserted = await db.transaction(async tx => {
-    const existing = await tx
-      .select()
-      .from(jobs)
-      .where(eq(jobs.externalId, input.externalId))
-      .limit(1);
-    if (existing[0]) return existing[0];
+  const created = await db.transaction(async tx => {
     const rows = await tx
       .insert(jobs)
       .values({
@@ -992,9 +988,18 @@ export async function createPersistentJob(input: {
         payload: input.payload,
         maxAttempts: input.maxAttempts,
       })
+      .onConflictDoNothing({ target: jobs.externalId })
       .returning();
-    return rows[0];
+    if (rows[0]) return { row: rows[0], inserted: true };
+    const existing = await tx
+      .select()
+      .from(jobs)
+      .where(eq(jobs.externalId, input.externalId))
+      .limit(1);
+    if (!existing[0]) throw new Error("Job could not be created or recovered");
+    return { row: existing[0], inserted: false };
   });
+  if (!created.inserted) return safePersistentJob(created.row);
   await writeAuditLog({
     actorUserId: input.userId,
     action: "job.created",
@@ -1009,9 +1014,8 @@ export async function createPersistentJob(input: {
     targetId: input.externalId,
     metadata: { jobType: input.jobType, status: "QUEUED" },
   });
-  return safePersistentJob(inserted);
+  return safePersistentJob(created.row);
 }
-
 export async function listPersistentJobs(
   userId: number,
   page = 0,
@@ -1282,6 +1286,68 @@ export async function settlePersistentJobFailure(input: {
     },
   });
   return safePersistentJob(updated[0]);
+}
+
+export async function recoverStalePersistentJobs(
+  now = new Date(),
+  timeoutMs = 5 * 60_000
+) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const cutoff = new Date(now.getTime() - timeoutMs);
+  const candidates = await db
+    .select()
+    .from(jobs)
+    .where(and(eq(jobs.status, "PROCESSING"), lt(jobs.updatedAt, cutoff)))
+    .limit(1000);
+  const recovered = [];
+  for (const candidate of candidates) {
+    const exhausted = candidate.attemptCount >= candidate.maxAttempts;
+    const nextRunAt = exhausted
+      ? now
+      : new Date(
+          now.getTime() + Math.min(30_000, 1_000 * 2 ** candidate.attemptCount)
+        );
+    const updated = await db
+      .update(jobs)
+      .set({
+        status: exhausted ? "FAILED" : "RETRYING",
+        error: {
+          code: exhausted ? "STALE_JOB_EXHAUSTED" : "STALE_JOB_RECOVERED",
+          message: exhausted
+            ? "Job exceeded its processing timeout after the retry budget was exhausted."
+            : "Job was returned to the queue after its worker stopped reporting progress.",
+        },
+        nextRunAt,
+        lockedBy: null,
+        lockedAt: null,
+        recoveryCount: sql`${jobs.recoveryCount} + 1`,
+        lastRecoveredAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(jobs.id, candidate.id),
+          eq(jobs.status, "PROCESSING"),
+          lt(jobs.updatedAt, cutoff)
+        )
+      )
+      .returning();
+    if (!updated[0]) continue;
+    await writeAuditLog({
+      actorUserId: updated[0].userId,
+      action: exhausted ? "job.stale_failed" : "job.stale_recovered",
+      targetType: "job",
+      targetId: updated[0].externalId,
+      metadata: {
+        status: updated[0].status,
+        recoveryCount: updated[0].recoveryCount,
+        attempt: updated[0].attemptCount,
+      },
+    });
+    recovered.push(safePersistentJob(updated[0]));
+  }
+  return recovered;
 }
 
 export async function getPersistentJobMetrics() {

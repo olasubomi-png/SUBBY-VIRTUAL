@@ -27,8 +27,6 @@ import {
   listAllInboxes,
   listAllWallets,
   listInboxes,
-  simulateEmail,
-  simulateSms,
 } from "./demoState";
 import { getDatabaseHealth } from "./db";
 import { shouldUsePersistentStore } from "./persistenceMode";
@@ -36,6 +34,8 @@ import {
   cancelUserJob,
   createJob,
   dispatchQueuedJobs,
+  queueEmailSimulationJob,
+  queueSmsSimulationJob,
   getAdminJobActivity,
   getAdminJobDetail,
   getAdminJobMetrics,
@@ -47,7 +47,6 @@ import {
 import { jobStatusSchema, jobTypeSchema, parseJobPayload } from "./jobTypes";
 import {
   cancelPersistentActivation,
-  completePersistentActivation,
   expirePersistentInbox,
   getAdminMetrics,
   getPersistentActivation,
@@ -64,7 +63,6 @@ import {
   getAdminUserDetail,
   listUserLedger,
   persistActivation,
-  persistCompletedInboxMessage,
   persistInbox,
   listPersistentActivations,
   listPersistentInboxes,
@@ -166,19 +164,9 @@ export const appRouter = router({
       ),
     simulateSms: protectedProcedure
       .input(z.object({ id: z.string().min(1).max(120) }))
-      .mutation(async ({ input, ctx }) => {
-        if (shouldUsePersistentStore()) {
-          await completePersistentActivation({
-            userId: ctx.user.id,
-            externalId: input.id,
-            sender: "SUBBY-DEMO",
-            body: "Your simulated verification code is 482913.",
-            receivedAt: new Date(),
-          });
-          return getPersistentActivation(ctx.user.id, input.id);
-        }
-        return simulateSms(ctx.user.id, input.id);
-      }),
+      .mutation(async ({ input, ctx }) =>
+        queueSmsSimulationJob(ctx.user.id, input.id)
+      ),
     cancelSms: protectedProcedure
       .input(z.object({ id: z.string().min(1).max(120) }))
       .mutation(async ({ input, ctx }) => {
@@ -201,22 +189,9 @@ export const appRouter = router({
       ),
     simulateEmail: protectedProcedure
       .input(z.object({ id: z.string().min(1).max(120) }))
-      .mutation(async ({ input, ctx }) => {
-        if (shouldUsePersistentStore()) {
-          const inbox = await getPersistentInbox(ctx.user.id, input.id);
-          await persistCompletedInboxMessage({
-            userId: ctx.user.id,
-            externalId: input.id,
-            fromAddress: "hello@subby.demo",
-            toAddress: inbox.address,
-            subject: "Demo inbox message",
-            body: "This simulated email confirms your Phase 1 inbox is working.",
-            receivedAt: new Date(),
-          });
-          return getPersistentInbox(ctx.user.id, input.id);
-        }
-        return simulateEmail(ctx.user.id, input.id);
-      }),
+      .mutation(async ({ input, ctx }) =>
+        queueEmailSimulationJob(ctx.user.id, input.id)
+      ),
     expireInbox: protectedProcedure
       .input(z.object({ id: z.string().min(1).max(120) }))
       .mutation(async ({ input, ctx }) => {

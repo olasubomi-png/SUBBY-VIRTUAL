@@ -11,6 +11,7 @@ import {
   settlePersistentJobFailure,
   updatePersistentJobProgress,
   cancelPersistentJob,
+  recoverStalePersistentJobs,
 } from "./persistence";
 
 const getDb = vi.hoisted(() => vi.fn());
@@ -60,38 +61,44 @@ function createFakeDb() {
   });
 
   const insert = (table: unknown) => ({
-    values: (value: any) => ({
-      returning: async () => {
-        if (table === jobs) {
-          const row = {
-            id: state.nextJobId++,
-            externalId: value.externalId,
-            userId: value.userId,
-            jobType: value.jobType,
-            status: "QUEUED",
-            payload: value.payload,
-            result: null,
-            error: null,
-            attemptCount: 0,
-            maxAttempts: value.maxAttempts,
-            progress: 0,
-            nextRunAt: now,
-            startedAt: null,
-            completedAt: null,
-            cancelledAt: null,
-            lockedAt: null,
-            lockedBy: null,
-            createdAt: now,
-            updatedAt: now,
-          };
-          state.jobs.push(row);
+    values: (value: any) => {
+      const chain: any = {
+        onConflictDoNothing: () => chain,
+        returning: async () => {
+          if (table === jobs) {
+            const row = {
+              id: state.nextJobId++,
+              externalId: value.externalId,
+              userId: value.userId,
+              jobType: value.jobType,
+              status: "QUEUED",
+              payload: value.payload,
+              result: null,
+              error: null,
+              attemptCount: 0,
+              maxAttempts: value.maxAttempts,
+              progress: 0,
+              nextRunAt: now,
+              startedAt: null,
+              completedAt: null,
+              cancelledAt: null,
+              lockedAt: null,
+              lockedBy: null,
+              recoveryCount: 0,
+              lastRecoveredAt: null,
+              createdAt: now,
+              updatedAt: now,
+            };
+            state.jobs.push(row);
+            return [row];
+          }
+          const row = { id: state.nextAuditId++, ...value, createdAt: now };
+          state.audits.push(row);
           return [row];
-        }
-        const row = { id: state.nextAuditId++, ...value, createdAt: now };
-        state.audits.push(row);
-        return [row];
-      },
-    }),
+        },
+      };
+      return chain;
+    },
   });
 
   const update = (table: unknown) => ({
@@ -100,7 +107,10 @@ function createFakeDb() {
         returning: async () => {
           const row = table === jobs ? state.jobs[0] : undefined;
           if (!row) return [];
-          Object.assign(row, changes);
+          const normalized = { ...changes };
+          if ("recoveryCount" in normalized)
+            normalized.recoveryCount = row.recoveryCount + 1;
+          Object.assign(row, normalized);
           return [row];
         },
       }),
@@ -221,6 +231,35 @@ describe("persistent job repository and audit activity", () => {
     expect(cancelJob.status).toBe("QUEUED");
     await cancelPersistentJob(userId, "persistent-job-3");
     expect(cancelFake.state.audits.at(-1)?.action).toBe("job.cancelled");
+  });
+
+  it("recovers a stale durable processing claim and audits the transition", async () => {
+    const fake = createFakeDb();
+    getDb.mockResolvedValue(fake.db);
+    await createPersistentJob({
+      externalId: "persistent-stale-job",
+      userId,
+      jobType: "MOCK_SMS_DELIVERY",
+      payload: { activationId: "activation-stale" },
+      maxAttempts: 3,
+    });
+    Object.assign(fake.state.jobs[0], {
+      status: "PROCESSING",
+      attemptCount: 1,
+      lockedBy: "dead-worker",
+      lockedAt: new Date("2026-08-26T10:00:00.000Z"),
+      updatedAt: new Date("2026-08-26T10:00:00.000Z"),
+    });
+    const recovered = await recoverStalePersistentJobs(
+      new Date("2026-08-26T12:00:00.000Z"),
+      5 * 60_000
+    );
+    expect(recovered[0]).toMatchObject({
+      status: "RETRYING",
+      recoveryCount: 1,
+    });
+    expect(fake.state.jobs[0].lockedBy).toBeNull();
+    expect(fake.state.audits.at(-1)?.action).toBe("job.stale_recovered");
   });
 
   it("redacts payload, result, error, lock metadata, and audit activity for user and admin reads", async () => {

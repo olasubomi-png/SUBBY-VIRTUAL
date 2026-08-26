@@ -19,6 +19,8 @@ export type FallbackJob = {
   updatedAt: string;
   nextRunAt: string;
   lockedBy?: string;
+  recoveryCount: number;
+  lastRecoveredAt?: string;
 };
 
 export type FallbackJobActivity = {
@@ -57,6 +59,7 @@ export function createFallbackJob(input: {
     createdAt: now,
     updatedAt: now,
     nextRunAt: now,
+    recoveryCount: 0,
   };
   jobs.set(job.externalId, job);
   appendFallbackActivity(job, "created", { status: job.status });
@@ -161,6 +164,46 @@ export function claimFallbackJob(
     attempt: candidate.attemptCount,
   });
   return candidate;
+}
+
+export function recoverStaleFallbackJobs(
+  now = new Date(),
+  timeoutMs = 5 * 60_000
+) {
+  const cutoff = now.getTime() - timeoutMs;
+  const recovered: FallbackJob[] = [];
+  for (const job of Array.from(jobs.values())) {
+    if (
+      job.status !== "PROCESSING" ||
+      new Date(job.updatedAt).getTime() > cutoff
+    )
+      continue;
+    const exhausted = job.attemptCount >= job.maxAttempts;
+    job.status = exhausted ? "FAILED" : "RETRYING";
+    job.error = {
+      code: exhausted ? "STALE_JOB_EXHAUSTED" : "STALE_JOB_RECOVERED",
+      message: exhausted
+        ? "Job exceeded its processing timeout after the retry budget was exhausted."
+        : "Job was returned to the queue after its worker stopped reporting progress.",
+    };
+    job.nextRunAt = exhausted
+      ? now.toISOString()
+      : new Date(now.getTime() + 1_000).toISOString();
+    job.lockedBy = undefined;
+    job.recoveryCount += 1;
+    job.lastRecoveredAt = now.toISOString();
+    job.updatedAt = now.toISOString();
+    appendFallbackActivity(
+      job,
+      exhausted ? "stale_failed" : "stale_recovered",
+      {
+        status: job.status,
+        recoveryCount: job.recoveryCount,
+      }
+    );
+    recovered.push(job);
+  }
+  return recovered;
 }
 
 export function updateFallbackJobProgress(

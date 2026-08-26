@@ -54,6 +54,8 @@ export const jobs = pgTable(
     cancelledAt: timestamp("cancelledAt"),
     lockedAt: timestamp("lockedAt"),
     lockedBy: varchar("lockedBy", { length: 120 }),
+    recoveryCount: integer("recoveryCount").notNull().default(0),
+    lastRecoveredAt: timestamp("lastRecoveredAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   },

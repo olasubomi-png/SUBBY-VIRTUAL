@@ -114,3 +114,23 @@ The new job-system test suite covers supported job creation, mock SMS and email 
 ### Exact files changed in the job-system pass
 
 The job-system pass changed `drizzle/schema.ts`; `drizzle/0006_smooth_dust.sql`; `drizzle/meta/_journal.json`; `drizzle/meta/0006_snapshot.json`; `server/jobTypes.ts`; `server/jobState.ts`; `server/jobsCleanup.ts`; `server/jobs.ts`; `server/demoState.ts`; `server/persistence.ts`; `server/routers.ts`; `server/_core/index.ts`; `server/jobSystem.test.ts`; `server/migration.test.ts`; `client/src/pages/Home.tsx`; `docs/DEPLOYMENT.md`; `docs/STEP2_RELEASE.md`; and `todo.md`.
+
+## Phase 1 job integration and reliability hardening
+
+SMS and email simulation mutations are now queue-authoritative. The protected tRPC procedures validate ownership and active resource state, then return a stable job reference instead of executing delivery inline. Repeated requests for the same user/resource return the same job, so a retry cannot create a second simulated message. The existing worker remains the only path that invokes the mock SMS and mail lifecycle helpers.
+
+Stale `PROCESSING` jobs are recovered before scheduled dispatch. A compare-and-set transition returns jobs to `RETRYING` with bounded backoff when attempts remain, or moves them to `FAILED` with a safe timeout code after the retry budget is exhausted. Recovery clears lock metadata, increments `recoveryCount`, records `lastRecoveredAt`, and writes `job.stale_recovered` or `job.stale_failed` audit activity. The fallback store applies the same policy for local development; it remains non-durable.
+
+Worker startup is explicit and platform-compatible. The server health response reports a ready scheduled dispatcher, and startup logs identify `/api/scheduled/dispatch-jobs` as the execution path. There is no in-process timer worker. Concurrent dispatch requests share an in-flight guard, while PostgreSQL claims remain atomic through `FOR UPDATE SKIP LOCKED`; this prevents duplicate dispatcher loops and duplicate job claims without changing the existing queue architecture.
+
+The additive recovery migration is `drizzle/0007_modern_eternals.sql`. It adds only `recoveryCount` and `lastRecoveredAt` to `jobs`. The configured development SQL endpoint still reports TiDB/MySQL and rejected the PostgreSQL migration syntax, so the migration must be applied to the actual PostgreSQL target before relying on restart-persistent recovery metadata.
+
+Coverage now includes queued SMS/email tRPC contracts, duplicate simulation requests, stale retry and exhausted-failure recovery, concurrent dispatch guarding, atomic fallback claims, and the existing persistence, authorization, privacy, and lifecycle suite. The current local validation run passed `pnpm check` and `pnpm test` with 58 tests; lint, production build, checkpoint, and GitHub synchronization remain release steps.
+
+### Exact files changed in this hardening pass
+
+This hardening pass changed `drizzle/schema.ts`; `drizzle/0007_modern_eternals.sql`; `drizzle/meta/_journal.json`; `drizzle/meta/0007_snapshot.json`; `server/jobState.ts`; `server/persistence.ts`; `server/jobs.ts`; `server/routers.ts`; `server/_core/index.ts`; `server/e2e.demo.test.ts`; `server/jobSystem.test.ts`; `server/migration.test.ts`; `client/src/pages/Home.tsx`; `docs/STEP2_RELEASE.md`; and `todo.md`.
+
+## Hardened release identity
+
+The Phase 1 hardened release is checkpointed as `83de23b97d18ec54ea2bfd7540f3ce9bc6cdb7f1`. Local `HEAD` and `origin/main` match this SHA, and the public repository is [olasubomi-png/SUBBY-VIRTUAL](https://github.com/olasubomi-png/SUBBY-VIRTUAL) on its `main` branch.

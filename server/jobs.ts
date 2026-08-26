@@ -3,6 +3,7 @@ import {
   expirePersistentInbox,
   completePersistentActivation,
   getPersistentInbox,
+  getPersistentActivation,
   persistCompletedInboxMessage,
   claimNextPersistentJob,
   completePersistentJob,
@@ -17,6 +18,7 @@ import {
   cancelPersistentJob,
   settlePersistentJobFailure,
   updatePersistentJobProgress,
+  recoverStalePersistentJobs,
 } from "./persistence";
 import { shouldUsePersistentStore } from "./persistenceMode";
 import { expireDemoResources } from "./jobsCleanup";
@@ -43,11 +45,14 @@ import {
   listFallbackJobs,
   retryFallbackJob,
   updateFallbackJobProgress,
+  recoverStaleFallbackJobs,
   type FallbackJob,
 } from "./jobState";
 import {
   expireActivation,
   expireInbox,
+  getActivation,
+  getInbox,
   simulateEmail,
   simulateSms,
 } from "./demoState";
@@ -97,7 +102,74 @@ function safeFallbackJob(job: FallbackJob) {
     cancelledAt: job.cancelledAt,
     updatedAt: job.updatedAt,
     nextRunAt: job.nextRunAt,
+    recoveryCount: job.recoveryCount,
+    lastRecoveredAt: job.lastRecoveredAt,
   };
+}
+
+export async function queueSmsSimulationJob(
+  userId: number,
+  activationId: string
+) {
+  const externalId = `sms-simulation-${userId}-${activationId}`;
+  if (shouldUsePersistentStore()) {
+    try {
+      return await getPersistentJob(userId, externalId);
+    } catch (error) {
+      if (error instanceof Error && error.message !== "Job not found")
+        throw error;
+      const activation = await getPersistentActivation(userId, activationId);
+      if (activation.status !== "ACTIVE")
+        throw new Error("Invalid activation state");
+      return createJob({
+        externalId,
+        userId,
+        jobType: "MOCK_SMS_DELIVERY",
+        payload: { activationId },
+      });
+    }
+  }
+  const existing = getFallbackJobByExternalId(externalId);
+  if (existing) return safeFallbackJob(existing);
+  const activation = getActivation(userId, activationId);
+  if (activation.status !== "ACTIVE")
+    throw new Error("Invalid activation state");
+  return createJob({
+    externalId,
+    userId,
+    jobType: "MOCK_SMS_DELIVERY",
+    payload: { activationId },
+  });
+}
+
+export async function queueEmailSimulationJob(userId: number, inboxId: string) {
+  const externalId = `email-simulation-${userId}-${inboxId}`;
+  if (shouldUsePersistentStore()) {
+    try {
+      return await getPersistentJob(userId, externalId);
+    } catch (error) {
+      if (error instanceof Error && error.message !== "Job not found")
+        throw error;
+      const inbox = await getPersistentInbox(userId, inboxId);
+      if (inbox.status !== "ACTIVE") throw new Error("Inbox is expired");
+      return createJob({
+        externalId,
+        userId,
+        jobType: "DEMO_EMAIL_SIMULATION",
+        payload: { inboxId },
+      });
+    }
+  }
+  const existing = getFallbackJobByExternalId(externalId);
+  if (existing) return safeFallbackJob(existing);
+  const inbox = getInbox(userId, inboxId);
+  if (inbox.status !== "ACTIVE") throw new Error("Inbox is expired");
+  return createJob({
+    externalId,
+    userId,
+    jobType: "DEMO_EMAIL_SIMULATION",
+    payload: { inboxId },
+  });
 }
 
 export async function createJob(input: {
@@ -196,6 +268,18 @@ export async function getAdminJobDetail(externalId: string) {
   return safeFallbackJob(job);
 }
 
+type JobExecutionFailureInjector = (
+  jobType: JobType,
+  resourceId: string
+) => Error | undefined;
+let executionFailureInjector: JobExecutionFailureInjector | undefined;
+
+export function setJobExecutionFailureInjectorForTests(
+  injector?: JobExecutionFailureInjector
+) {
+  executionFailureInjector = injector;
+}
+
 async function executeJob(
   job: {
     id: string | number;
@@ -215,6 +299,8 @@ async function executeJob(
       ? parsedPayload.activationId
       : parsedPayload.inboxId;
   const persistent = shouldUsePersistentStore();
+  const injectedFailure = executionFailureInjector?.(job.jobType, resourceId);
+  if (injectedFailure) throw injectedFailure;
   const progress = async (value: number) => {
     if (persistent) {
       await updatePersistentJobProgress(
@@ -275,7 +361,25 @@ async function executeJob(
   return { kind: "activation_expiry", resourceId, completed: Boolean(result) };
 }
 
-export async function dispatchQueuedJobs(limit = 10, now = new Date()) {
+let dispatchInFlight:
+  | Promise<{
+      claimed: number;
+      completed: number;
+      retrying: number;
+      failed: number;
+    }>
+  | undefined;
+
+export async function recoverStaleJobs(
+  now = new Date(),
+  timeoutMs = 5 * 60_000
+) {
+  return shouldUsePersistentStore()
+    ? recoverStalePersistentJobs(now, timeoutMs)
+    : recoverStaleFallbackJobs(now, timeoutMs).map(safeFallbackJob);
+}
+
+async function runDispatchQueuedJobs(limit = 10, now = new Date()) {
   const boundedLimit = Math.max(1, Math.min(limit, 25));
   const workerId = `worker-${process.pid}-${Date.now()}`;
   const summary = { claimed: 0, completed: 0, retrying: 0, failed: 0 };
@@ -332,6 +436,15 @@ export async function dispatchQueuedJobs(limit = 10, now = new Date()) {
   return summary;
 }
 
+export async function dispatchQueuedJobs(limit = 10, now = new Date()) {
+  if (dispatchInFlight) return dispatchInFlight;
+  dispatchInFlight = runDispatchQueuedJobs(limit, now).finally(() => {
+    dispatchInFlight = undefined;
+  });
+  return dispatchInFlight;
+}
+
 export async function dispatchScheduledJobs(limit = 10) {
+  await recoverStaleJobs();
   return dispatchQueuedJobs(limit);
 }

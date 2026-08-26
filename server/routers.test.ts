@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
-import { addDemoCredits } from "./demoState";
+import {
+  addDemoCredits,
+  createDemoActivation,
+  resetDemoState,
+} from "./demoState";
 
 const base = { req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] };
 const user = {
@@ -18,7 +22,10 @@ const user = {
 };
 const admin = { ...user, role: "admin" as const };
 
-beforeEach(() => vi.stubEnv("DATABASE_URL", ""));
+beforeEach(() => {
+  vi.stubEnv("DATABASE_URL", "");
+  resetDemoState();
+});
 afterEach(() => vi.unstubAllEnvs());
 
 describe("workspace authorization and validation", () => {
@@ -28,6 +35,23 @@ describe("workspace authorization and validation", () => {
       code: "UNAUTHORIZED",
     });
   });
+  it("queues SMS simulation only for its owner and redacts job lock metadata", async () => {
+    const activation = createDemoActivation({
+      userId: user.id,
+      country: "NG",
+      serviceId: "verify",
+      priceMinor: 150,
+    });
+    const caller = appRouter.createCaller({ ...base, user });
+    const other = appRouter.createCaller({ ...base, user: { ...user, id: 8 } });
+    const job = await caller.workspace.simulateSms({ id: activation.id });
+    expect(job.status).toBe("QUEUED");
+    expect(job).not.toHaveProperty("lockedBy");
+    await expect(
+      other.workspace.simulateSms({ id: activation.id })
+    ).rejects.toThrow("Activation not found");
+  });
+
   it("rejects invalid SMS request input", async () => {
     const caller = appRouter.createCaller({ ...base, user });
     await expect(

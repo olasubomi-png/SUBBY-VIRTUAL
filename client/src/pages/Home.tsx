@@ -441,9 +441,10 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
     },
   });
   const simulateSms = trpc.workspace.simulateSms.useMutation({
-    onSuccess: () => {
-      setFeedback("Simulated SMS received; activation completed.");
+    onSuccess: data => {
+      setFeedback(`SMS simulation queued · job ${data.id}`);
       smsRequests.refetch();
+      smsDetail.refetch();
     },
   });
   const cancelSms = trpc.workspace.cancelSms.useMutation({
@@ -453,9 +454,10 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
     },
   });
   const simulateEmail = trpc.workspace.simulateEmail.useMutation({
-    onSuccess: () => {
-      setFeedback("Simulated email received successfully.");
+    onSuccess: data => {
+      setFeedback(`Email simulation queued · job ${data.id}`);
       mailInboxes.refetch();
+      mailDetail.refetch();
     },
   });
   const expireInbox = trpc.workspace.expireInbox.useMutation({
@@ -660,9 +662,10 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
                       <Button
                         variant="outline"
                         className="mt-3 border-white/10 bg-transparent text-xs text-slate-300"
+                        disabled={simulateSms.isPending}
                         onClick={() => simulateSms.mutate({ id: item.id })}
                       >
-                        Simulate SMS
+                        {simulateSms.isPending ? "Queueing…" : "Simulate SMS"}
                       </Button>
                       {item.status === "ACTIVE" && (
                         <Button
@@ -680,9 +683,12 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
                       <Button
                         variant="outline"
                         className="border-white/10 bg-transparent text-xs text-slate-300"
+                        disabled={simulateEmail.isPending}
                         onClick={() => simulateEmail.mutate({ id: item.id })}
                       >
-                        Simulate email
+                        {simulateEmail.isPending
+                          ? "Queueing…"
+                          : "Simulate email"}
                       </Button>
                       {item.status === "ACTIVE" && (
                         <Button

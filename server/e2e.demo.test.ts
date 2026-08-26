@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { appRouter } from "./routers";
+import { dispatchQueuedJobs, getUserJob } from "./jobs";
 import type { TrpcContext } from "./_core/context";
 
 const contextFor = (id: number): TrpcContext => ({
@@ -33,14 +34,22 @@ describe("Step 2 end-to-end demo flow", () => {
     });
     expect(activation.status).toBe("ACTIVE");
     expect(activation.walletBalanceMinor).toBe(85000);
-    const completed = await caller.workspace.simulateSms({ id: activation.id });
+    const smsJob = await caller.workspace.simulateSms({ id: activation.id });
+    expect(smsJob.status).toBe("QUEUED");
+    await dispatchQueuedJobs();
+    const completed = await caller.workspace.smsRequestDetail({
+      id: activation.id,
+    });
     expect(completed.status).toBe("COMPLETED");
     expect(completed.message?.body).toContain("482913");
     const inbox = await caller.workspace.createMailInbox({
       label: "verification",
     });
     expect(inbox.address).toContain("@subby.demo");
-    const received = await caller.workspace.simulateEmail({ id: inbox.id });
+    const emailJob = await caller.workspace.simulateEmail({ id: inbox.id });
+    expect(emailJob.status).toBe("QUEUED");
+    await dispatchQueuedJobs();
+    const received = await caller.workspace.mailInboxDetail({ id: inbox.id });
     expect(received.messages).toHaveLength(1);
     const wallet = await caller.workspace.wallet();
     expect(wallet.balanceMinor).toBe(85000);
@@ -104,14 +113,16 @@ describe("duplicate simulation protection", () => {
       country: "NG",
       serviceId: "verify",
     });
-    await caller.workspace.simulateSms({ id: activation.id });
-    await expect(
-      caller.workspace.simulateSms({ id: activation.id })
-    ).rejects.toThrow("Invalid activation state");
+    const firstSms = await caller.workspace.simulateSms({ id: activation.id });
+    const secondSms = await caller.workspace.simulateSms({ id: activation.id });
+    expect(secondSms.id).toBe(firstSms.id);
+    await dispatchQueuedJobs();
     const inbox = await caller.workspace.createMailInbox({ label: "dedupe" });
-    await caller.workspace.simulateEmail({ id: inbox.id });
-    await expect(
-      caller.workspace.simulateEmail({ id: inbox.id })
-    ).rejects.toThrow("Inbox already has a simulated message");
+    const firstEmail = await caller.workspace.simulateEmail({ id: inbox.id });
+    const secondEmail = await caller.workspace.simulateEmail({ id: inbox.id });
+    expect(secondEmail.id).toBe(firstEmail.id);
+    await dispatchQueuedJobs();
+    expect((await getUserJob(7010, firstSms.id)).status).toBe("COMPLETED");
+    expect((await getUserJob(7010, firstEmail.id)).status).toBe("COMPLETED");
   });
 });

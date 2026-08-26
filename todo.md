@@ -213,3 +213,37 @@
 - [x] Save a new checkpoint for the validated persistent job-system release
 - [x] Push the new release to GitHub main and verify origin/main matches
 - [x] Record the exact pushed GitHub SHA in the release report and handoff
+
+# Latest attached brief implementation continuation
+
+- [x] Review the latest attached brief against the current durable job-system architecture and identify concrete gaps
+- [x] Implement the requested server-side contracts without enabling live providers or payments
+- [x] Update the existing frontend only where required by the brief, preserving protected routes and privacy boundaries
+- [x] Add focused tests for the new behavior, authorization, persistence/fallback boundaries, and redaction
+- [x] Update deployment and release documentation for the implemented changes and limitations
+- [x] Run pnpm lint, pnpm check, pnpm test, and pnpm build
+- [x] Save a checkpoint, synchronize the release to GitHub main, and report the exact SHA
+
+# Job integration and reliability hardening
+
+- [x] Route mock SMS and demo email simulation mutations through one authoritative queued job path with idempotent references
+- [x] Add stale PROCESSING recovery with bounded timeout, retry exhaustion, cancellation/completion guards, and audit activity
+- [x] Add explicit worker dispatch readiness and safe startup/shutdown behavior without in-process timers or duplicate workers
+- [x] Add concurrency, recovery, timeout, failure-injection, and domain-consistency tests for the authoritative job path
+- [x] Update the release documentation with the actual integration path and remaining runtime limitations
+
+# Phase 1 job system integration and reliability hardening
+
+- [x] Route SMS simulation through the authoritative background job workflow and preserve idempotent request behavior
+- [x] Route email simulation through the authoritative background job workflow and preserve idempotent request behavior
+- [x] Add stale PROCESSING job recovery with bounded retry/failure transitions and audit-backed recovery activity
+- [x] Harden worker/dispatcher startup readiness and duplicate-start behavior without introducing an in-process timer worker
+- [x] Add concurrency and failure-injection coverage for atomic claims, stale recovery, and queued domain workflows
+- [x] Update job architecture and release documentation with the authoritative async path and recovery runbook
+- [x] Run lint, type checks, tests, and production build; save a checkpoint and synchronize the hardened release to GitHub main
+
+# Hardening evidence gap follow-up
+
+- [x] Add a queued-workflow transient failure-injection test proving RETRYING, bounded nextRunAt, and no duplicated domain side effects
+- [x] Add a queued-workflow permanent failure-injection test proving FAILED status, safe error metadata, and no false completion
+- [x] Add an explicit queue-authoritative router authorization and redaction regression test

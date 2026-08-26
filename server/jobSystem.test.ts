@@ -15,6 +15,8 @@ import {
   failFallbackJob,
   resetFallbackJobs,
   retryFallbackJob,
+  recoverStaleFallbackJobs,
+  getFallbackJobByExternalId,
 } from "./jobState";
 import {
   cancelUserJob,
@@ -26,6 +28,8 @@ import {
   getUserJob,
   listUserJobActivity,
   listUserJobs,
+  queueSmsSimulationJob,
+  setJobExecutionFailureInjectorForTests,
 } from "./jobs";
 import { isRetryableJobError, parseJobPayload } from "./jobTypes";
 
@@ -177,6 +181,159 @@ describe("fallback job lifecycle", () => {
     expect(job.status).toBe("FAILED");
     expect(isRetryableJobError(new Error("temporary unavailable"))).toBe(true);
     expect(isRetryableJobError(new Error("Activation not found"))).toBe(false);
+  });
+
+  it("recovers stale processing jobs into retrying or failed states", () => {
+    const retryable = createFallbackJob({
+      externalId: "job-stale-retry-31",
+      userId: user.id,
+      jobType: "MAILBOX_EXPIRY",
+      payload: { inboxId: "demo-inbox-31" },
+      maxAttempts: 3,
+    });
+    const exhausted = createFallbackJob({
+      externalId: "job-stale-failed-31",
+      userId: user.id,
+      jobType: "MAILBOX_EXPIRY",
+      payload: { inboxId: "demo-inbox-32" },
+      maxAttempts: 1,
+    });
+    retryable.nextRunAt = "2026-08-26T00:00:00.000Z";
+    exhausted.nextRunAt = "2026-08-26T00:00:00.000Z";
+    claimFallbackJob(
+      "worker-stale-a",
+      undefined,
+      new Date("2026-08-26T00:00:00Z")
+    );
+    claimFallbackJob(
+      "worker-stale-b",
+      undefined,
+      new Date("2026-08-26T00:00:01Z")
+    );
+    exhausted.attemptCount = exhausted.maxAttempts;
+    retryable.updatedAt = "2026-08-25T23:00:00.000Z";
+    exhausted.updatedAt = "2026-08-25T23:00:00.000Z";
+
+    const recovered = recoverStaleFallbackJobs(
+      new Date("2026-08-26T01:00:00Z"),
+      5 * 60_000
+    );
+
+    expect(recovered.map(job => job.id)).toEqual(
+      expect.arrayContaining([retryable.id, exhausted.id])
+    );
+    expect(retryable.status).toBe("RETRYING");
+    expect(exhausted.status).toBe("FAILED");
+    expect(retryable.lockedBy).toBeUndefined();
+    expect(retryable.recoveryCount).toBe(1);
+    expect(exhausted.recoveryCount).toBe(1);
+  });
+
+  it("guards concurrent dispatch calls so one trigger owns the claim", async () => {
+    const firstActivation = createDemoActivation({
+      userId: user.id,
+      country: "NG",
+      serviceId: "verify",
+      priceMinor: 150,
+    });
+    const secondActivation = createDemoActivation({
+      userId: user.id,
+      country: "NG",
+      serviceId: "verify",
+      priceMinor: 150,
+    });
+    await createJob({
+      externalId: "job-concurrent-a",
+      userId: user.id,
+      jobType: "MOCK_SMS_DELIVERY",
+      payload: { activationId: firstActivation.id },
+    });
+    await createJob({
+      externalId: "job-concurrent-b",
+      userId: user.id,
+      jobType: "MOCK_SMS_DELIVERY",
+      payload: { activationId: secondActivation.id },
+    });
+
+    const [first, second] = await Promise.all([
+      dispatchQueuedJobs(1),
+      dispatchQueuedJobs(1),
+    ]);
+
+    expect(first).toEqual(second);
+    expect(first).toMatchObject({ claimed: 1, completed: 1 });
+    expect(
+      (await listUserJobs(user.id)).items.filter(
+        item => item.status === "COMPLETED"
+      )
+    ).toHaveLength(1);
+  });
+
+  it("retries an injected transient queued-workflow failure without a domain side effect", async () => {
+    const activation = createDemoActivation({
+      userId: user.id,
+      country: "NG",
+      serviceId: "verify",
+      priceMinor: 150,
+    });
+    const job = await createJob({
+      externalId: "job-injected-transient-31",
+      userId: user.id,
+      jobType: "MOCK_SMS_DELIVERY",
+      payload: { activationId: activation.id },
+      maxAttempts: 2,
+    });
+    setJobExecutionFailureInjectorForTests(
+      () => new Error("temporary provider unavailable")
+    );
+    await expect(dispatchQueuedJobs()).resolves.toMatchObject({ retrying: 1 });
+    setJobExecutionFailureInjectorForTests();
+    const raw = getFallbackJobByExternalId(job.id)!;
+    raw.nextRunAt = new Date(Date.now() - 1).toISOString();
+    await expect(dispatchQueuedJobs()).resolves.toMatchObject({ completed: 1 });
+    expect(getActivation(user.id, activation.id).status).toBe("COMPLETED");
+  });
+
+  it("fails an injected permanent queued-workflow error safely without false completion", async () => {
+    const activation = createDemoActivation({
+      userId: user.id,
+      country: "NG",
+      serviceId: "verify",
+      priceMinor: 150,
+    });
+    const job = await createJob({
+      externalId: "job-injected-permanent-31",
+      userId: user.id,
+      jobType: "MOCK_SMS_DELIVERY",
+      payload: { activationId: activation.id },
+    });
+    setJobExecutionFailureInjectorForTests(
+      () => new Error("invalid domain validation failure")
+    );
+    await expect(dispatchQueuedJobs()).resolves.toMatchObject({ failed: 1 });
+    setJobExecutionFailureInjectorForTests();
+    await expect(getUserJob(user.id, job.id)).resolves.toMatchObject({
+      status: "FAILED",
+      error: { code: "DOMAIN_ERROR" },
+    });
+    expect(getActivation(user.id, activation.id).status).toBe("ACTIVE");
+  });
+
+  it("keeps queue-authoritative simulation ownership and redaction boundaries explicit", async () => {
+    const activation = createDemoActivation({
+      userId: user.id,
+      country: "NG",
+      serviceId: "verify",
+      priceMinor: 150,
+    });
+    await expect(queueSmsSimulationJob(99, activation.id)).rejects.toThrow(
+      "Activation not found"
+    );
+    const job = await queueSmsSimulationJob(user.id, activation.id);
+    expect(job.payload).toEqual({ activationId: activation.id });
+    expect(job).not.toHaveProperty("lockedBy");
+    expect(job).not.toHaveProperty("result.body");
+    await expect(getUserJob(99, job.id)).rejects.toThrow("Job not found");
   });
 
   it("validates supported payloads and rejects arbitrary worker inputs", () => {
