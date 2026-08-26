@@ -37,7 +37,7 @@
 - [x] Add cross-user authorization, persistence-foundation, Redis-fallback, provider, realtime, and expiry test coverage
 - [x] Update VPS deployment documentation, health checks, graceful shutdown, and private service networking
 - [x] Run pnpm check, pnpm lint, pnpm test, and pnpm build with all failures fixed
-- [ ] Commit the upgrade to the existing private SUBBY-VIRTUAL repository and report the commit hash
+- [x] Commit the upgrade to the existing private SUBBY-VIRTUAL repository and report the commit hash
 
 # Upgrade hardening follow-up
 
