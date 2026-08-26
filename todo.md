@@ -70,7 +70,7 @@
 - [x] Complete protected admin activation, mailbox, wallet-ledger, audit, and live overview review procedures; full user search UI remains a follow-on enhancement
 - [x] Add meaningful cross-user authorization, wallet, SMS lifecycle, mail lifecycle, admin, and end-to-end UI-flow contract tests
 - [x] Generate and review the migration, document the managed migration boundary, and run pnpm check, pnpm lint, pnpm test, and pnpm build
-- [ ] Commit Step 2 to the existing private SUBBY-VIRTUAL repository and report changed files, tests, build, and limitations
+- [x] Commit Step 2 to the existing private SUBBY-VIRTUAL repository and report changed files, tests, build, and limitations
 
 # Step 2 final gap fixes
 
@@ -85,3 +85,8 @@
 
 - [x] Return the live demo wallet balance from workspace.summary when PostgreSQL is unavailable
 - [x] Add a regression test proving summary balance follows demo credits in fallback mode
+
+# Step 2 release evidence
+
+- [x] Verify the Step 2 files exist on origin/main with a concrete commit hash
+- [x] Prepare and save the Step 2 release report with changed files, validation results, and limitations
