@@ -839,35 +839,42 @@ function LegacyTransactions() {
 
 function Admin() {
   const overview = trpc.admin.overview.useQuery();
+  const activations = trpc.admin.activations.useQuery();
+  const inboxes = trpc.admin.inboxes.useQuery();
+  const walletLedger = trpc.admin.walletLedger.useQuery();
+  const auditHistory = trpc.admin.auditHistory.useQuery({
+    limit: 20,
+    offset: 0,
+  });
   const sections = [
     [
       "Users",
-      "1,482 active · 6 suspended",
+      `${overview.data?.users ?? 0} protected users`,
       "Review account status and role assignments",
     ],
     [
       "Wallet ledger",
-      "₦1.28m volume · 0 exceptions",
+      `₦${((overview.data?.walletVolume ?? 0) / 100).toFixed(2)} recorded volume`,
       "Trace credits, debits, refunds, and adjustments",
     ],
     [
       "Delivery requests",
-      "326 today · 4 in review",
+      `${activations.data?.length ?? 0} activations · ${inboxes.data?.length ?? 0} inboxes`,
       "Inspect mock SMS and mail request status",
     ],
     [
       "Providers",
-      "2 active · mock mode",
+      `${overview.data?.activeProviders ?? 0} evaluated · mock mode`,
       "Check provider health and operating mode",
     ],
     [
       "Pricing",
-      "3 SMS rules · 2 mail rules",
+      "Server-side pricing rules",
       "Review safe Phase 1 pricing rules",
     ],
     [
       "Audit logs",
-      "No policy alerts · 24h",
+      `${auditHistory.data?.length ?? 0} recent events`,
       "Review structured operational events",
     ],
   ];

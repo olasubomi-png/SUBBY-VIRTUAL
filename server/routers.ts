@@ -20,6 +20,9 @@ import {
   getDemoWallet,
   getInbox,
   listActivations,
+  listAllActivations,
+  listAllInboxes,
+  listAllWallets,
   listInboxes,
   simulateEmail,
   simulateSms,
@@ -312,6 +315,9 @@ export const appRouter = router({
           : auditEvents.slice(-20).reverse(),
       };
     }),
+    activations: adminProcedure.query(() => listAllActivations()),
+    inboxes: adminProcedure.query(() => listAllInboxes()),
+    walletLedger: adminProcedure.query(() => listAllWallets()),
     auditHistory: adminProcedure
       .input(
         z.object({

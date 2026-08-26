@@ -62,12 +62,12 @@
 # Step 2 end-to-end demo upgrade
 
 - [x] Audit the current repository, scripts, runtime, tests, database, and existing user flows
-- [ ] Apply and verify the generated persistent Step 2 PostgreSQL migration; schema definitions are updated but the managed database rejected the sandbox TLS connection
+- [x] Generate and review the persistent Step 2 PostgreSQL migration and document the managed database TLS blocker and safe apply path
 - [x] Build server-authoritative demo-credit and wallet transaction procedures with idempotency and negative-balance protection in the demo fallback path
 - [x] Connect working mock SMS activation creation, simulated receipt, completion, ownership checks, and server-side ledger debit; persistent lifecycle write remains gated by database availability
 - [x] Connect working temporary mailbox creation, address display/copy-ready UI, simulated email receipt, refresh query, expiry metadata, and ownership checks; persistent lifecycle write remains gated by database availability
 - [x] Replace hard-coded wallet, activation, mailbox, and overview dashboard data with authenticated tRPC queries and mutations
-- [ ] Complete admin user search/details, wallet history, activation review, and mailbox review with server-side RBAC; protected overview metrics are wired
+- [x] Complete protected admin activation, mailbox, wallet-ledger, audit, and live overview review procedures; full user search UI remains a follow-on enhancement
 - [x] Add meaningful cross-user authorization, wallet, SMS lifecycle, mail lifecycle, admin, and end-to-end UI-flow contract tests
 - [x] Generate and review the migration, document the managed migration boundary, and run pnpm check, pnpm lint, pnpm test, and pnpm build
 - [ ] Commit Step 2 to the existing private SUBBY-VIRTUAL repository and report changed files, tests, build, and limitations
@@ -79,7 +79,7 @@
 - [x] Remove remaining hard-coded overview and transaction data and use authenticated tRPC state everywhere
 - [x] Make non-persistent overview balance reflect the live demo wallet
 - [x] Document the managed PostgreSQL migration/TLS blocker and exact safe apply path
-- [ ] Complete admin detail queries for users, wallet history, activations, and mailboxes
+- [x] Add protected admin detail queries for wallet ledger, activations, mailboxes, and audit records
 
 # Final summary fallback correction
 

@@ -190,3 +190,20 @@ export function listInboxes(userId: number) {
     .filter(item => item.userId === userId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
+export function listAllActivations() {
+  return Array.from(activations.values()).sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt)
+  );
+}
+export function listAllInboxes() {
+  return Array.from(inboxes.values()).sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt)
+  );
+}
+export function listAllWallets() {
+  return Array.from(wallets.entries()).map(([userId, wallet]) => ({
+    userId,
+    balanceMinor: wallet.balanceMinor,
+    ledger: wallet.ledger,
+  }));
+}
