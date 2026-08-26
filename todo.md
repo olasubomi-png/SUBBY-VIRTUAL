@@ -15,7 +15,7 @@
 - [x] Add and update Vitest coverage for wallet integrity, authentication, RBAC, provider abstractions, and API validation
 - [x] Run dependency installation, lint/type checks, tests, and production build; fix all errors
 - [x] Capture final UI verification screenshots and confirm responsive behavior
-- [ ] Commit completed Phase 1 to the private GitHub repository SUBBY-VIRTUAL
+- [x] Commit completed Phase 1 to the private GitHub repository SUBBY-VIRTUAL
 
 - [x] Complete deterministic mock provider lifecycle methods and status progression
 - [x] Register protected customer routes for all Phase 1 pages and add a transactions view
