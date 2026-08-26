@@ -10,8 +10,11 @@ import {
   users,
   transactions,
   providers,
+  jobs,
 } from "../drizzle/schema";
 import { getDb } from "./db";
+import type { JobStatus, JobType } from "./jobTypes";
+import { safeJobMetadata } from "./jobTypes";
 
 export async function ensureWallet(
   userId: number,
@@ -929,4 +932,487 @@ export async function expirePersistentInbox(
     )
     .returning();
   return updated[0];
+}
+
+function safePersistentJob(row: any) {
+  const safePayload = safeJobMetadata(row.payload);
+  const safeResult = safeJobMetadata(row.result);
+  return {
+    id: row.externalId,
+    userId: row.userId,
+    jobType: row.jobType as JobType,
+    status: row.status as JobStatus,
+    payload: safePayload,
+    result: Object.keys(safeResult).length ? safeResult : undefined,
+    error:
+      row.error && typeof row.error === "object"
+        ? {
+            code:
+              typeof row.error.code === "string" ? row.error.code : "JOB_ERROR",
+            message:
+              typeof row.error.message === "string"
+                ? row.error.message.slice(0, 200)
+                : "Job failed",
+          }
+        : undefined,
+    attemptCount: row.attemptCount,
+    maxAttempts: row.maxAttempts,
+    progress: row.progress,
+    createdAt: row.createdAt.toISOString(),
+    startedAt: row.startedAt?.toISOString(),
+    completedAt: row.completedAt?.toISOString(),
+    cancelledAt: row.cancelledAt?.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    nextRunAt: row.nextRunAt.toISOString(),
+  };
+}
+
+export async function createPersistentJob(input: {
+  externalId: string;
+  userId: number;
+  jobType: JobType;
+  payload: Record<string, string>;
+  maxAttempts: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const inserted = await db.transaction(async tx => {
+    const existing = await tx
+      .select()
+      .from(jobs)
+      .where(eq(jobs.externalId, input.externalId))
+      .limit(1);
+    if (existing[0]) return existing[0];
+    const rows = await tx
+      .insert(jobs)
+      .values({
+        externalId: input.externalId,
+        userId: input.userId,
+        jobType: input.jobType,
+        payload: input.payload,
+        maxAttempts: input.maxAttempts,
+      })
+      .returning();
+    return rows[0];
+  });
+  await writeAuditLog({
+    actorUserId: input.userId,
+    action: "job.created",
+    targetType: "job",
+    targetId: input.externalId,
+    metadata: { jobType: input.jobType, status: "QUEUED" },
+  });
+  await writeAuditLog({
+    actorUserId: input.userId,
+    action: "job.queued",
+    targetType: "job",
+    targetId: input.externalId,
+    metadata: { jobType: input.jobType, status: "QUEUED" },
+  });
+  return safePersistentJob(inserted);
+}
+
+export async function listPersistentJobs(
+  userId: number,
+  page = 0,
+  pageSize = 20
+) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const [countRows, rows] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(jobs)
+      .where(eq(jobs.userId, userId)),
+    db
+      .select()
+      .from(jobs)
+      .where(eq(jobs.userId, userId))
+      .orderBy(desc(jobs.createdAt), desc(jobs.id))
+      .limit(Math.min(pageSize, 50))
+      .offset(Math.max(page, 0) * Math.min(pageSize, 50)),
+  ]);
+  const total = Number(countRows[0]?.count ?? 0);
+  return {
+    items: rows.map(safePersistentJob),
+    page,
+    pageSize: Math.min(pageSize, 50),
+    total,
+    totalPages: Math.ceil(total / Math.min(pageSize, 50)),
+  };
+}
+
+export async function getPersistentJob(userId: number, externalId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const rows = await db
+    .select()
+    .from(jobs)
+    .where(and(eq(jobs.userId, userId), eq(jobs.externalId, externalId)))
+    .limit(1);
+  if (!rows[0]) throw new Error("Job not found");
+  return safePersistentJob(rows[0]);
+}
+
+export async function listPersistentJobActivity(
+  userId: number,
+  externalId: string,
+  limit = 50
+) {
+  await getPersistentJob(userId, externalId);
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const rows = await db
+    .select({
+      id: auditLogs.id,
+      eventType: auditLogs.action,
+      metadata: auditLogs.metadata,
+      createdAt: auditLogs.createdAt,
+    })
+    .from(auditLogs)
+    .where(
+      and(
+        eq(auditLogs.actorUserId, userId),
+        eq(auditLogs.targetType, "job"),
+        eq(auditLogs.targetId, externalId)
+      )
+    )
+    .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
+    .limit(Math.min(limit, 100));
+  return rows.map(row => ({
+    id: String(row.id),
+    eventType: row.eventType,
+    metadata: safeJobMetadata(row.metadata),
+    createdAt: row.createdAt.toISOString(),
+  }));
+}
+
+export async function cancelPersistentJob(userId: number, externalId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const rows = await db
+    .select()
+    .from(jobs)
+    .where(and(eq(jobs.userId, userId), eq(jobs.externalId, externalId)))
+    .limit(1);
+  const job = rows[0];
+  if (!job) throw new Error("Job not found");
+  if (job.status !== "QUEUED" && job.status !== "RETRYING")
+    throw new Error("Job cannot be cancelled in its current state");
+  const now = new Date();
+  const updated = await db
+    .update(jobs)
+    .set({ status: "CANCELLED", cancelledAt: now, updatedAt: now })
+    .where(
+      and(
+        eq(jobs.userId, userId),
+        eq(jobs.externalId, externalId),
+        or(eq(jobs.status, "QUEUED"), eq(jobs.status, "RETRYING"))
+      )
+    )
+    .returning();
+  if (!updated[0])
+    throw new Error("Job cannot be cancelled in its current state");
+  await writeAuditLog({
+    actorUserId: userId,
+    action: "job.cancelled",
+    targetType: "job",
+    targetId: externalId,
+    metadata: { status: "CANCELLED" },
+  });
+  return safePersistentJob(updated[0]);
+}
+
+export async function claimNextPersistentJob(
+  workerId: string,
+  now = new Date()
+) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const result = await db.execute(sql`
+    WITH candidate AS (
+      SELECT "id"
+      FROM "jobs"
+      WHERE "status" IN ('QUEUED', 'RETRYING')
+        AND "nextRunAt" <= ${now}
+        AND "attemptCount" < "maxAttempts"
+      ORDER BY "createdAt", "id"
+      FOR UPDATE SKIP LOCKED
+      LIMIT 1
+    )
+    UPDATE "jobs" AS job
+    SET "status" = 'PROCESSING',
+        "attemptCount" = job."attemptCount" + 1,
+        "startedAt" = COALESCE(job."startedAt", ${now}),
+        "lockedAt" = ${now},
+        "lockedBy" = ${workerId},
+        "updatedAt" = ${now}
+    FROM candidate
+    WHERE job."id" = candidate."id"
+    RETURNING job.*
+  `);
+  const row = (result as { rows?: any[] }).rows?.[0];
+  if (!row) return undefined;
+  await writeAuditLog({
+    actorUserId: row.userId,
+    action: "job.processing_started",
+    targetType: "job",
+    targetId: row.externalId,
+    metadata: {
+      jobType: row.jobType,
+      status: "PROCESSING",
+      attempt: row.attemptCount,
+    },
+  });
+  return row;
+}
+
+export async function updatePersistentJobProgress(
+  jobId: number,
+  workerId: string,
+  progress: number,
+  userId: number,
+  externalId: string
+) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const now = new Date();
+  const updated = await db
+    .update(jobs)
+    .set({ progress: Math.max(0, Math.min(99, progress)), updatedAt: now })
+    .where(
+      and(
+        eq(jobs.id, jobId),
+        eq(jobs.lockedBy, workerId),
+        eq(jobs.status, "PROCESSING")
+      )
+    )
+    .returning();
+  if (!updated[0]) throw new Error("Job claim is no longer active");
+  await writeAuditLog({
+    actorUserId: userId,
+    action: "job.progress_changed",
+    targetType: "job",
+    targetId: externalId,
+    metadata: { progress: updated[0].progress },
+  });
+  return updated[0];
+}
+
+export async function completePersistentJob(
+  jobId: number,
+  workerId: string,
+  userId: number,
+  externalId: string,
+  result: Record<string, string | number | boolean>
+) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const now = new Date();
+  const updated = await db
+    .update(jobs)
+    .set({
+      status: "COMPLETED",
+      progress: 100,
+      result: safeJobMetadata(result),
+      completedAt: now,
+      lockedBy: null,
+      lockedAt: null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(jobs.id, jobId),
+        eq(jobs.lockedBy, workerId),
+        eq(jobs.status, "PROCESSING")
+      )
+    )
+    .returning();
+  if (!updated[0]) throw new Error("Job claim is no longer active");
+  await writeAuditLog({
+    actorUserId: userId,
+    action: "job.completed",
+    targetType: "job",
+    targetId: externalId,
+    metadata: { status: "COMPLETED" },
+  });
+  return safePersistentJob(updated[0]);
+}
+
+export async function settlePersistentJobFailure(input: {
+  jobId: number;
+  workerId: string;
+  userId: number;
+  externalId: string;
+  error: { code: string; message: string };
+  retryAt?: Date;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const retry = Boolean(input.retryAt);
+  const now = new Date();
+  const updated = await db
+    .update(jobs)
+    .set({
+      status: retry ? "RETRYING" : "FAILED",
+      error: input.error,
+      nextRunAt: input.retryAt ?? now,
+      lockedBy: null,
+      lockedAt: null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(jobs.id, input.jobId),
+        eq(jobs.lockedBy, input.workerId),
+        eq(jobs.status, "PROCESSING")
+      )
+    )
+    .returning();
+  if (!updated[0]) throw new Error("Job claim is no longer active");
+  await writeAuditLog({
+    actorUserId: input.userId,
+    action: retry ? "job.retry_scheduled" : "job.failed",
+    targetType: "job",
+    targetId: input.externalId,
+    metadata: {
+      status: retry ? "RETRYING" : "FAILED",
+      code: input.error.code,
+      attempt: updated[0].attemptCount,
+    },
+  });
+  return safePersistentJob(updated[0]);
+}
+
+export async function getPersistentJobMetrics() {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const rows = await db
+    .select({ status: jobs.status, count: sql<number>`count(*)` })
+    .from(jobs)
+    .groupBy(jobs.status);
+  const metrics = {
+    total: 0,
+    queued: 0,
+    processing: 0,
+    retrying: 0,
+    completed: 0,
+    failed: 0,
+    cancelled: 0,
+  };
+  for (const row of rows) {
+    const key = row.status.toLowerCase() as keyof typeof metrics;
+    if (key in metrics) metrics[key] = Number(row.count);
+    metrics.total += Number(row.count);
+  }
+  return metrics;
+}
+
+export async function listPersistentAdminJobs(
+  page = 0,
+  pageSize = 20,
+  status?: JobStatus
+) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const condition = status ? eq(jobs.status, status) : undefined;
+  const [countRows, rows] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(jobs)
+      .where(condition),
+    db
+      .select()
+      .from(jobs)
+      .where(condition)
+      .orderBy(desc(jobs.createdAt), desc(jobs.id))
+      .limit(Math.min(pageSize, 50))
+      .offset(Math.max(page, 0) * Math.min(pageSize, 50)),
+  ]);
+  const total = Number(countRows[0]?.count ?? 0);
+  return {
+    items: rows.map(safePersistentJob),
+    page,
+    pageSize: Math.min(pageSize, 50),
+    total,
+    totalPages: Math.ceil(total / Math.min(pageSize, 50)),
+  };
+}
+
+export async function listPersistentAdminJobActivity(limit = 50) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const rows = await db
+    .select({
+      id: auditLogs.id,
+      userId: auditLogs.actorUserId,
+      jobId: auditLogs.targetId,
+      eventType: auditLogs.action,
+      metadata: auditLogs.metadata,
+      createdAt: auditLogs.createdAt,
+    })
+    .from(auditLogs)
+    .where(eq(auditLogs.targetType, "job"))
+    .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
+    .limit(Math.min(limit, 100));
+  return rows.map(row => ({
+    id: String(row.id),
+    userId: row.userId,
+    jobId: row.jobId,
+    eventType: row.eventType,
+    metadata: safeJobMetadata(row.metadata),
+    createdAt: row.createdAt.toISOString(),
+  }));
+}
+
+export async function expirePersistentActivation(
+  userId: number,
+  externalId: string
+) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const rows = await db
+    .select()
+    .from(smsActivations)
+    .where(
+      and(
+        eq(smsActivations.userId, userId),
+        eq(smsActivations.externalId, externalId)
+      )
+    )
+    .limit(1);
+  if (!rows[0]) throw new Error("Activation not found");
+  if (rows[0].status === "EXPIRED") return rows[0];
+  if (rows[0].status !== "WAITING" && rows[0].status !== "ACTIVE")
+    throw new Error("Activation cannot be expired in its current state");
+  const now = new Date();
+  const updated = await db
+    .update(smsActivations)
+    .set({ status: "EXPIRED", updatedAt: now })
+    .where(
+      and(
+        eq(smsActivations.userId, userId),
+        eq(smsActivations.externalId, externalId),
+        or(
+          eq(smsActivations.status, "WAITING"),
+          eq(smsActivations.status, "ACTIVE")
+        )
+      )
+    )
+    .returning();
+  if (!updated[0])
+    throw new Error("Activation cannot be expired in its current state");
+  return updated[0];
+}
+
+export async function getPersistentAdminJob(externalId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const rows = await db
+    .select()
+    .from(jobs)
+    .where(eq(jobs.externalId, externalId))
+    .limit(1);
+  if (!rows[0]) throw new Error("Job not found");
+  return safePersistentJob(rows[0]);
 }

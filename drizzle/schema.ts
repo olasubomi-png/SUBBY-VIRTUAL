@@ -34,6 +34,44 @@ export const users = pgTable(
     ),
   })
 );
+export const jobs = pgTable(
+  "jobs",
+  {
+    id: serial("id").primaryKey(),
+    externalId: varchar("externalId", { length: 120 }).notNull().unique(),
+    userId: integer("userId").notNull(),
+    jobType: varchar("jobType", { length: 48 }).notNull(),
+    status: varchar("status", { length: 16 }).notNull().default("QUEUED"),
+    payload: jsonb("payload").notNull().default({}),
+    result: jsonb("result"),
+    error: jsonb("error"),
+    attemptCount: integer("attemptCount").notNull().default(0),
+    maxAttempts: integer("maxAttempts").notNull().default(3),
+    progress: integer("progress").notNull().default(0),
+    nextRunAt: timestamp("nextRunAt").defaultNow().notNull(),
+    startedAt: timestamp("startedAt"),
+    completedAt: timestamp("completedAt"),
+    cancelledAt: timestamp("cancelledAt"),
+    lockedAt: timestamp("lockedAt"),
+    lockedBy: varchar("lockedBy", { length: 120 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  },
+  table => ({
+    ownerCreated: index("jobs_owner_created_idx").on(
+      table.userId,
+      table.createdAt,
+      table.id
+    ),
+    statusNextRun: index("jobs_status_next_run_idx").on(
+      table.status,
+      table.nextRunAt,
+      table.createdAt,
+      table.id
+    ),
+  })
+);
+
 export const wallets = pgTable(
   "wallets",
   {

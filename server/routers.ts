@@ -33,6 +33,19 @@ import {
 import { getDatabaseHealth } from "./db";
 import { shouldUsePersistentStore } from "./persistenceMode";
 import {
+  cancelUserJob,
+  createJob,
+  dispatchQueuedJobs,
+  getAdminJobActivity,
+  getAdminJobDetail,
+  getAdminJobMetrics,
+  getAdminJobs,
+  getUserJob,
+  listUserJobActivity,
+  listUserJobs,
+} from "./jobs";
+import { jobStatusSchema, jobTypeSchema, parseJobPayload } from "./jobTypes";
+import {
   cancelPersistentActivation,
   completePersistentActivation,
   expirePersistentInbox,
@@ -368,6 +381,87 @@ export const appRouter = router({
       balance: 0,
       entries: [] as const,
     })),
+    jobs: router({
+      list: protectedProcedure
+        .input(
+          z.object({
+            page: z.number().int().min(0).max(10000).default(0),
+            pageSize: z.number().int().min(1).max(50).default(20),
+          })
+        )
+        .query(({ input, ctx }) =>
+          listUserJobs(ctx.user.id, input.page, input.pageSize)
+        ),
+      detail: protectedProcedure
+        .input(z.object({ id: z.string().trim().min(1).max(120) }))
+        .query(({ input, ctx }) => getUserJob(ctx.user.id, input.id)),
+      activity: protectedProcedure
+        .input(
+          z.object({
+            id: z.string().trim().min(1).max(120),
+            limit: z.number().int().min(1).max(100).default(50),
+          })
+        )
+        .query(({ input, ctx }) =>
+          listUserJobActivity(ctx.user.id, input.id, input.limit)
+        ),
+      create: protectedProcedure
+        .input(
+          z.object({
+            requestId: z.string().uuid(),
+            jobType: jobTypeSchema,
+            payload: z.record(z.string(), z.string()),
+            maxAttempts: z.number().int().min(1).max(5).default(3),
+          })
+        )
+        .mutation(async ({ input, ctx }) => {
+          if (
+            !(await checkDistributedRateLimit(
+              `subby:jobs:${ctx.user.id}`,
+              30,
+              60
+            ))
+          )
+            throw new Error("Job creation rate limit exceeded");
+          parseJobPayload(input.jobType, input.payload);
+          const resourceId =
+            "activationId" in input.payload
+              ? input.payload.activationId
+              : input.payload.inboxId;
+          if (
+            input.jobType === "MOCK_SMS_DELIVERY" ||
+            input.jobType === "ACTIVATION_EXPIRY"
+          ) {
+            if (shouldUsePersistentStore())
+              await getPersistentActivation(ctx.user.id, resourceId);
+            else getActivation(ctx.user.id, resourceId);
+          } else {
+            if (shouldUsePersistentStore())
+              await getPersistentInbox(ctx.user.id, resourceId);
+            else getInbox(ctx.user.id, resourceId);
+          }
+          return createJob({
+            externalId: `job-${ctx.user.id}-${input.requestId}`,
+            userId: ctx.user.id,
+            jobType: input.jobType,
+            payload: input.payload,
+            maxAttempts: input.maxAttempts,
+          });
+        }),
+      cancel: protectedProcedure
+        .input(z.object({ id: z.string().trim().min(1).max(120) }))
+        .mutation(async ({ input, ctx }) => {
+          if (
+            !(await checkDistributedRateLimit(
+              `subby:job-cancel:${ctx.user.id}`,
+              30,
+              60
+            ))
+          )
+            throw new Error("Job cancellation rate limit exceeded");
+          return cancelUserJob(ctx.user.id, input.id);
+        }),
+    }),
     /* legacy example intentionally removed */
     /* ledger: protectedProcedure.query(() => ({
       currency: "NGN" as const,
@@ -440,6 +534,31 @@ export const appRouter = router({
           throw new Error("Persistent user management requires PostgreSQL");
         return getAdminUserDetail(input.userId);
       }),
+    jobs: router({
+      metrics: adminProcedure.query(() => getAdminJobMetrics()),
+      list: adminProcedure
+        .input(
+          z.object({
+            page: z.number().int().min(0).max(10000).default(0),
+            pageSize: z.number().int().min(1).max(50).default(20),
+            status: jobStatusSchema.optional(),
+          })
+        )
+        .query(({ input }) =>
+          getAdminJobs(input.page, input.pageSize, input.status)
+        ),
+      activity: adminProcedure
+        .input(
+          z.object({ limit: z.number().int().min(1).max(100).default(50) })
+        )
+        .query(({ input }) => getAdminJobActivity(input.limit)),
+      detail: adminProcedure
+        .input(z.object({ id: z.string().trim().min(1).max(120) }))
+        .query(({ input }) => getAdminJobDetail(input.id)),
+      dispatch: adminProcedure
+        .input(z.object({ limit: z.number().int().min(1).max(25).default(10) }))
+        .mutation(({ input }) => dispatchQueuedJobs(input.limit)),
+    }),
     databaseHealth: adminProcedure.query(() => getDatabaseHealth()),
     overview: adminProcedure.query(async () => {
       const persistent = shouldUsePersistentStore()

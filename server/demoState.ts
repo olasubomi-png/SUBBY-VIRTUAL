@@ -159,6 +159,14 @@ export function cancelSms(userId: number, id: string) {
   item.status = "CANCELLED";
   return item;
 }
+export function expireActivation(userId: number, id: string) {
+  const item = getActivation(userId, id);
+  if (item.status === "EXPIRED") return item;
+  if (item.status !== "ACTIVE")
+    throw new Error("Activation cannot be expired in its current state");
+  item.status = "EXPIRED";
+  return item;
+}
 export function listActivations(userId: number) {
   return Array.from(activations.values())
     .filter(item => item.userId === userId)
@@ -222,4 +230,10 @@ export function listAllWallets() {
     balanceMinor: wallet.balanceMinor,
     ledger: wallet.ledger,
   }));
+}
+
+export function resetDemoState() {
+  wallets.clear();
+  activations.clear();
+  inboxes.clear();
 }

@@ -9,7 +9,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { closeDb } from "../db";
 import { closeRedis } from "../redis";
-import { expireDemoResources } from "../jobs";
+import { dispatchScheduledJobs, expireDemoResources } from "../jobs";
 import { sdk } from "./sdk";
 import { serveStatic, setupVite } from "./vite";
 
@@ -53,6 +53,21 @@ async function startServer() {
     } catch (error) {
       return res.status(500).json({
         error: error instanceof Error ? error.message : "cleanup failed",
+      });
+    }
+  });
+  app.post("/api/scheduled/dispatch-jobs", async (req, res) => {
+    try {
+      const user = await sdk.authenticateRequest(req);
+      if (!user.isCron) return res.status(403).json({ error: "cron-only" });
+      const requestedLimit = Number(req.body?.limit ?? 10);
+      const limit = Number.isInteger(requestedLimit)
+        ? Math.max(1, Math.min(requestedLimit, 25))
+        : 10;
+      return res.json({ ok: true, result: await dispatchScheduledJobs(limit) });
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "job dispatch failed",
       });
     }
   });

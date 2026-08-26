@@ -43,6 +43,13 @@
       "when": 1787768977572,
       "tag": "0005_closed_skullbuster",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787782169810,
+      "tag": "0006_smooth_dust",
+      "breakpoints": true
     }
   ]
 }

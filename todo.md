@@ -180,3 +180,36 @@
 - [x] Add a seeded multi-page persistent search test proving distinct bounded result sets and deterministic ordering across pages
 - [x] Add a seeded cross-user detail isolation test proving user A cannot receive user B wallet, activation, mailbox, message, or audit data
 - [x] Extend the detail privacy test across all response sections and keep the audit allowlist assertions
+
+# Persistent job system and real-time activity continuation
+
+- [x] Add a validated persistent PostgreSQL job model with stable reference, owner, type, status, progress, attempts, retry, lifecycle timestamps, payload metadata, result metadata, and safe error metadata
+- [x] Add supported mock-workflow job types only; reject arbitrary commands, code, and unsupported payloads
+- [x] Implement atomic durable job claiming and lifecycle transitions that prevent duplicate concurrent processing
+- [x] Implement bounded transient retry policy, permanent failure handling, and cancellation-aware retry suppression
+- [x] Integrate job lifecycle activity events with the existing audit system using safe metadata
+- [x] Add authenticated user job list, detail, activity, and ownership-scoped cancellation procedures with bounded pagination
+- [x] Add protected admin job metrics, recent activity, status filtering, and redacted job detail procedures
+- [x] Add Jobs / Activity frontend views with server data, controlled refresh, progress, errors, and eligible cancellation
+- [x] Preserve explicit PostgreSQL durability and non-durable fallback boundaries without enabling live providers or payments
+- [x] Add comprehensive job lifecycle, retry, cancellation, duplicate-claim, ownership, privacy, admin, and fallback tests
+- [x] Generate and review an additive PostgreSQL migration without claiming it was applied to the incompatible managed endpoint
+- [x] Document job architecture, worker startup, supported types, retry/cancellation policy, activity, monitoring, and persistence modes
+- [x] Run pnpm lint, pnpm check, pnpm test, and pnpm build
+- [x] Save a final checkpoint, push the release to GitHub main, and report the exact SHA
+
+# Persistent job evidence hardening
+
+- [x] Add direct persistent-repository tests proving create, claim, progress, complete, retry/fail, and cancel lifecycle events are written to and read from auditLogs
+- [x] Add fallback user/admin job detail and activity redaction tests for payload, result, error, lock metadata, message bodies, and secret-like keys
+- [x] Add a persistent-path redaction test proving sanitized job payload/result/error/activity responses and no lock metadata
+
+# Fallback job privacy evidence correction
+
+- [x] Add fallback-mode user/admin list, detail, and activity tests covering payload/result/error sanitization, lock omission, secret-like key stripping, and message/body omission
+
+# Persistent job release evidence closure
+
+- [x] Save a new checkpoint for the validated persistent job-system release
+- [x] Push the new release to GitHub main and verify origin/main matches
+- [x] Record the exact pushed GitHub SHA in the release report and handoff

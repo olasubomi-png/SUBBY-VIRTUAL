@@ -12,7 +12,7 @@ const journal = JSON.parse(
 };
 const snapshot = JSON.parse(
   readFileSync(
-    new URL("../drizzle/meta/0005_snapshot.json", import.meta.url),
+    new URL("../drizzle/meta/0006_snapshot.json", import.meta.url),
     "utf8"
   )
 ) as {
@@ -31,7 +31,7 @@ describe("PostgreSQL migration contract", () => {
     expect(journal.entries.map(entry => entry.idx)).toEqual(
       journal.entries.map((_, index) => index)
     );
-    expect(journal.entries.at(-1)?.tag).toBe("0005_closed_skullbuster");
+    expect(journal.entries.at(-1)?.tag).toBe("0006_smooth_dust");
   });
 
   it("matches message columns and uses additive unique constraints", () => {
@@ -54,6 +54,38 @@ describe("PostgreSQL migration contract", () => {
       'ADD CONSTRAINT "mailMessages_externalId_unique" UNIQUE("externalId")'
     );
     expect(migration).not.toMatch(/DROP TABLE|DROP COLUMN|CREATE TABLE/);
+  });
+
+  it("keeps the jobs schema and claim indexes additive and explicit", () => {
+    const jobsMigration = readFileSync(
+      new URL("../drizzle/0006_smooth_dust.sql", import.meta.url),
+      "utf8"
+    );
+    const jobColumns = Object.keys(snapshot.tables["public.jobs"].columns);
+    expect(jobColumns).toEqual(
+      expect.arrayContaining([
+        "externalId",
+        "userId",
+        "jobType",
+        "status",
+        "payload",
+        "result",
+        "error",
+        "attemptCount",
+        "maxAttempts",
+        "progress",
+        "nextRunAt",
+        "startedAt",
+        "completedAt",
+        "cancelledAt",
+        "lockedAt",
+        "lockedBy",
+      ])
+    );
+    expect(jobsMigration).toContain('CREATE TABLE "jobs"');
+    expect(jobsMigration).toContain('CREATE INDEX "jobs_owner_created_idx"');
+    expect(jobsMigration).toContain('CREATE INDEX "jobs_status_next_run_idx"');
+    expect(jobsMigration).not.toMatch(/DROP TABLE|DROP COLUMN/);
   });
 
   it("keeps admin user-search indexes additive and explicit", () => {

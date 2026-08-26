@@ -13,10 +13,12 @@ import {
   CircleDollarSign,
   Inbox,
   LayoutDashboard,
+  ListTodo,
   LogOut,
   Menu,
   MessageSquareText,
   Plus,
+  RefreshCw,
   Search,
   ShieldCheck,
   Sparkles,
@@ -32,6 +34,7 @@ const nav = [
   { id: "sms", label: "SMS requests", icon: MessageSquareText },
   { id: "mail", label: "Mail inboxes", icon: Inbox },
   { id: "wallet", label: "Wallet", icon: WalletCards },
+  { id: "jobs", label: "Jobs / Activity", icon: ListTodo },
   { id: "activity", label: "Activity", icon: BarChart3 },
   { id: "transactions", label: "Transactions", icon: CircleDollarSign },
   { id: "settings", label: "Settings", icon: ShieldCheck },
@@ -966,6 +969,376 @@ function LegacyTransactions() {
   );
 }
 
+function jobTypeLabel(jobType: string) {
+  return jobType
+    .toLowerCase()
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, character => character.toUpperCase());
+}
+
+function jobStatusClass(status: string) {
+  if (status === "COMPLETED") return "text-emerald-300 bg-emerald-300/10";
+  if (status === "FAILED") return "text-rose-200 bg-rose-300/10";
+  if (status === "CANCELLED") return "text-slate-400 bg-slate-400/10";
+  if (status === "PROCESSING") return "text-cyan-200 bg-cyan-300/10";
+  return "text-amber-200 bg-amber-300/10";
+}
+
+function Jobs() {
+  const [page, setPage] = useState(0);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const jobs = trpc.workspace.jobs.list.useQuery(
+    { page, pageSize: 10 },
+    { refetchInterval: 5000 }
+  );
+  const detail = trpc.workspace.jobs.detail.useQuery(
+    { id: selectedId ?? "" },
+    { enabled: selectedId !== null, refetchInterval: 5000 }
+  );
+  const activity = trpc.workspace.jobs.activity.useQuery(
+    { id: selectedId ?? "", limit: 50 },
+    { enabled: selectedId !== null, refetchInterval: 5000 }
+  );
+  const smsRequests = trpc.workspace.smsRequests.useQuery();
+  const mailInboxes = trpc.workspace.mailInboxes.useQuery();
+  const utils = trpc.useUtils();
+  const createJob = trpc.workspace.jobs.create.useMutation({
+    onSuccess: result => {
+      setSelectedId(result.id);
+      void utils.workspace.jobs.list.invalidate();
+    },
+  });
+  const cancelJob = trpc.workspace.jobs.cancel.useMutation({
+    onSuccess: result => {
+      setSelectedId(result.id);
+      void utils.workspace.jobs.list.invalidate();
+      void utils.workspace.jobs.detail.invalidate({ id: result.id });
+      void utils.workspace.jobs.activity.invalidate({ id: result.id });
+    },
+  });
+
+  const queueJob = (
+    jobType: "MOCK_SMS_DELIVERY" | "DEMO_EMAIL_SIMULATION",
+    resourceId: string
+  ) => {
+    createJob.mutate({
+      requestId: crypto.randomUUID(),
+      jobType,
+      payload:
+        jobType === "MOCK_SMS_DELIVERY"
+          ? { activationId: resourceId }
+          : { inboxId: resourceId },
+      maxAttempts: 3,
+    });
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="mb-2 text-sm text-slate-500">Workspace / Jobs</p>
+          <h1 className="text-3xl font-semibold text-white">Jobs / Activity</h1>
+          <p className="mt-2 max-w-2xl text-sm text-slate-400">
+            Queue safe mock workflows and follow their server-authoritative
+            lifecycle without refreshing the application.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          <RefreshCw className="h-3.5 w-3.5" />
+          Refreshes every 5 seconds
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+          <CardHeader>
+            <CardTitle className="text-base text-white">
+              Queue a mock SMS delivery
+            </CardTitle>
+            <p className="text-xs text-slate-500">
+              Only existing owned activations can be queued.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {smsRequests.data?.filter(
+              item => item.status === "ACTIVE" || item.status === "WAITING"
+            ).length ? (
+              smsRequests.data
+                .filter(
+                  item => item.status === "ACTIVE" || item.status === "WAITING"
+                )
+                .slice(0, 5)
+                .map(item => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-slate-200">
+                        {item.serviceId} · {item.country}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">{item.id}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      disabled={createJob.isPending}
+                      onClick={() => queueJob("MOCK_SMS_DELIVERY", item.id)}
+                      className="shrink-0 bg-cyan-300 text-slate-950 hover:bg-cyan-200"
+                    >
+                      Queue
+                    </Button>
+                  </div>
+                ))
+            ) : (
+              <p className="py-4 text-sm text-slate-500">
+                Create an eligible mock SMS request first.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+          <CardHeader>
+            <CardTitle className="text-base text-white">
+              Queue a demo email simulation
+            </CardTitle>
+            <p className="text-xs text-slate-500">
+              The worker validates inbox ownership and state before delivery.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {mailInboxes.data?.filter(item => item.status === "ACTIVE")
+              .length ? (
+              mailInboxes.data
+                .filter(item => item.status === "ACTIVE")
+                .slice(0, 5)
+                .map(item => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-slate-200">
+                        {item.address}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">{item.id}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      disabled={createJob.isPending}
+                      onClick={() => queueJob("DEMO_EMAIL_SIMULATION", item.id)}
+                      className="shrink-0 bg-cyan-300 text-slate-950 hover:bg-cyan-200"
+                    >
+                      Queue
+                    </Button>
+                  </div>
+                ))
+            ) : (
+              <p className="py-4 text-sm text-slate-500">
+                Create an active mock inbox first.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {createJob.error && (
+        <p className="rounded-lg border border-rose-300/20 bg-rose-300/5 p-4 text-sm text-rose-200">
+          {createJob.error.message}
+        </p>
+      )}
+      {cancelJob.error && (
+        <p className="rounded-lg border border-rose-300/20 bg-rose-300/5 p-4 text-sm text-rose-200">
+          {cancelJob.error.message}
+        </p>
+      )}
+
+      <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+        <CardHeader>
+          <CardTitle className="text-base text-white">Your jobs</CardTitle>
+          <p className="text-xs text-slate-500">
+            Fallback mode is explicitly in-memory; PostgreSQL mode preserves job
+            history across restarts.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {jobs.isLoading ? (
+            <p className="py-8 text-center text-sm text-slate-500">
+              Loading jobs…
+            </p>
+          ) : jobs.error ? (
+            <p className="rounded-lg border border-rose-300/20 bg-rose-300/5 p-4 text-sm text-rose-200">
+              {jobs.error.message}
+            </p>
+          ) : jobs.data?.items.length ? (
+            <div className="space-y-2">
+              {jobs.data.items.map(job => (
+                <button
+                  key={job.id}
+                  onClick={() => setSelectedId(job.id)}
+                  className="w-full rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-left transition hover:bg-white/[0.04]"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-slate-200">
+                        {jobTypeLabel(job.jobType)}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {job.id} · {new Date(job.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${jobStatusClass(job.status)}`}
+                    >
+                      {job.status}
+                    </span>
+                  </div>
+                  <div className="mt-4 flex items-center gap-3">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
+                      <div
+                        className="h-full rounded-full bg-cyan-300 transition-all"
+                        style={{ width: `${job.progress}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-slate-500">
+                      {job.progress}% · {job.attemptCount}/{job.maxAttempts}
+                    </span>
+                  </div>
+                  {job.error && (
+                    <p className="mt-3 text-xs text-rose-200">
+                      {job.error.code}: {job.error.message}
+                    </p>
+                  )}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="py-8 text-center text-sm text-slate-500">
+              No jobs have been queued yet.
+            </p>
+          )}
+          <div className="mt-5 flex items-center justify-between border-t border-white/[0.06] pt-4 text-xs text-slate-500">
+            <span>
+              {jobs.data?.total ?? 0} total job
+              {jobs.data?.total === 1 ? "" : "s"}
+            </span>
+            <div className="flex items-center gap-3">
+              <span>
+                Page {(jobs.data?.page ?? page) + 1} of{" "}
+                {Math.max(jobs.data?.totalPages ?? 0, 1)}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page === 0}
+                onClick={() => setPage(current => current - 1)}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page + 1 >= (jobs.data?.totalPages ?? 0)}
+                onClick={() => setPage(current => current + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {selectedId && (
+        <Card className="border-cyan-300/15 bg-[#10131c] shadow-none">
+          <CardHeader>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-base text-white">
+                  Job detail
+                </CardTitle>
+                <p className="mt-1 text-xs text-slate-500">{selectedId}</p>
+              </div>
+              {detail.data &&
+                (detail.data.status === "QUEUED" ||
+                  detail.data.status === "RETRYING") && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={cancelJob.isPending}
+                    onClick={() => cancelJob.mutate({ id: selectedId })}
+                    className="border-rose-300/20 text-rose-200 hover:bg-rose-300/10"
+                  >
+                    Cancel job
+                  </Button>
+                )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {detail.isLoading ? (
+              <p className="text-sm text-slate-500">Loading job detail…</p>
+            ) : detail.error ? (
+              <p className="text-sm text-rose-200">{detail.error.message}</p>
+            ) : detail.data ? (
+              <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
+                <div className="space-y-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-sm">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-500">Status</span>
+                    <span
+                      className={`rounded-full px-2 py-1 text-[10px] font-semibold ${jobStatusClass(detail.data.status)}`}
+                    >
+                      {detail.data.status}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-500">Progress</span>
+                    <span className="text-slate-200">
+                      {detail.data.progress}%
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-500">Attempts</span>
+                    <span className="text-slate-200">
+                      {detail.data.attemptCount}/{detail.data.maxAttempts}
+                    </span>
+                  </div>
+                  {detail.data.error && (
+                    <div className="border-t border-white/[0.06] pt-3 text-xs text-rose-200">
+                      {detail.data.error.code}: {detail.data.error.message}
+                    </div>
+                  )}
+                </div>
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    Activity timeline
+                  </p>
+                  {activity.data?.length ? (
+                    <div className="space-y-3">
+                      {activity.data.map(event => (
+                        <div key={event.id} className="flex gap-3 text-xs">
+                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-300" />
+                          <div>
+                            <p className="text-slate-300">{event.eventType}</p>
+                            <p className="mt-1 text-slate-600">
+                              {new Date(event.createdAt).toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500">
+                      No activity recorded yet.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 function Admin() {
   const overview = trpc.admin.overview.useQuery();
   const [userSearch, setUserSearch] = useState("");
@@ -986,6 +1359,37 @@ function Admin() {
   const auditHistory = trpc.admin.auditHistory.useQuery({
     limit: 20,
     offset: 0,
+  });
+  const [adminJobStatus, setAdminJobStatus] = useState<
+    | "ALL"
+    | "QUEUED"
+    | "PROCESSING"
+    | "RETRYING"
+    | "COMPLETED"
+    | "FAILED"
+    | "CANCELLED"
+  >("ALL");
+  const jobMetrics = trpc.admin.jobs.metrics.useQuery(undefined, {
+    refetchInterval: 5000,
+  });
+  const adminJobs = trpc.admin.jobs.list.useQuery(
+    {
+      page: 0,
+      pageSize: 10,
+      ...(adminJobStatus === "ALL" ? {} : { status: adminJobStatus }),
+    },
+    { refetchInterval: 5000 }
+  );
+  const jobActivity = trpc.admin.jobs.activity.useQuery(
+    { limit: 20 },
+    { refetchInterval: 5000 }
+  );
+  const dispatchJobs = trpc.admin.jobs.dispatch.useMutation({
+    onSuccess: () => {
+      void jobMetrics.refetch();
+      void adminJobs.refetch();
+      void jobActivity.refetch();
+    },
   });
   const sections = [
     [
@@ -1063,6 +1467,137 @@ function Admin() {
           accent="emerald"
         />
       </div>
+      <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+        <CardHeader>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-base text-white">
+                Job operations
+              </CardTitle>
+              <p className="mt-1 text-xs text-slate-500">
+                Safe aggregate metrics and redacted activity from the server.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              disabled={dispatchJobs.isPending}
+              onClick={() => dispatchJobs.mutate({ limit: 10 })}
+              className="bg-cyan-300 text-slate-950 hover:bg-cyan-200"
+            >
+              {dispatchJobs.isPending ? "Dispatching…" : "Run queued jobs"}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
+            {(
+              [
+                ["queued", "Queued"],
+                ["processing", "Processing"],
+                ["retrying", "Retrying"],
+                ["completed", "Completed"],
+                ["failed", "Failed"],
+                ["cancelled", "Cancelled"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() =>
+                  setAdminJobStatus(key.toUpperCase() as typeof adminJobStatus)
+                }
+                className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 text-left transition hover:bg-white/[0.05]"
+              >
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600">
+                  {label}
+                </p>
+                <p className="mt-2 text-xl font-semibold text-white">
+                  {jobMetrics.data?.[key] ?? 0}
+                </p>
+              </button>
+            ))}
+          </div>
+          <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+            <div>
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Recent jobs
+                </p>
+                <button
+                  onClick={() => setAdminJobStatus("ALL")}
+                  className="text-xs text-cyan-200 hover:text-cyan-100"
+                >
+                  {adminJobStatus === "ALL"
+                    ? "All statuses"
+                    : `Filter: ${adminJobStatus}`}
+                </button>
+              </div>
+              {adminJobs.data?.items.length ? (
+                <div className="space-y-2">
+                  {adminJobs.data.items.map(job => (
+                    <div
+                      key={job.id}
+                      className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm text-slate-200">
+                            {jobTypeLabel(job.jobType)}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-600">
+                            {job.id} · user #{job.userId}
+                          </p>
+                        </div>
+                        <span
+                          className={`rounded-full px-2 py-1 text-[10px] font-semibold ${jobStatusClass(job.status)}`}
+                        >
+                          {job.status}
+                        </span>
+                      </div>
+                      <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/[0.06]">
+                        <div
+                          className="h-full bg-cyan-300"
+                          style={{ width: `${job.progress}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">
+                  No jobs match this status.
+                </p>
+              )}
+            </div>
+            <div>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                Recent job activity
+              </p>
+              {jobActivity.data?.length ? (
+                <div className="space-y-2">
+                  {jobActivity.data.slice(0, 6).map(event => (
+                    <div
+                      key={event.id}
+                      className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3"
+                    >
+                      <p className="text-xs text-slate-300">
+                        {event.eventType}
+                      </p>
+                      <p className="mt-1 text-[11px] text-slate-600">
+                        {event.jobId} ·{" "}
+                        {new Date(event.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">
+                  No job activity recorded.
+                </p>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
       <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
         <CardHeader className="gap-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -1618,6 +2153,7 @@ export default function Home() {
           {active === "sms" && <RequestPage type="sms" />}
           {active === "mail" && <RequestPage type="mail" />}
           {active === "wallet" && <Wallet />}
+          {active === "jobs" && <Jobs />}
           {active === "activity" && <Wallet />}
           {active === "transactions" && <Transactions />}
           {active === "admin" && isAdmin ? (
