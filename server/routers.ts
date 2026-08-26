@@ -9,7 +9,17 @@ import {
 } from "./_core/trpc";
 import { z } from "zod";
 import { LocalDemoMailProvider, MockSMSProvider } from "./domain";
-import { checkRateLimit, createAuditEvent, type AuditEvent } from "./security";
+import { createAuditEvent, type AuditEvent } from "./security";
+import { checkDistributedRateLimit } from "./redis";
+import {
+  getAdminMetrics,
+  getUserWalletSummary,
+  listAuditLogs,
+  listUserLedger,
+  persistActivation,
+  persistInbox,
+  writeAuditLog,
+} from "./persistence";
 const sms = new MockSMSProvider();
 const mail = new LocalDemoMailProvider();
 const auditEvents: AuditEvent[] = [];
@@ -25,13 +35,18 @@ export const appRouter = router({
     }),
   }),
   workspace: router({
-    summary: protectedProcedure.query(({ ctx }) => ({
-      user: ctx.user.name ?? "Customer",
-      balance: { NGN: 24680, USD: 0 },
-      activeRequests: 2,
-      successRate: 98.4,
-      providerMode: "mock" as const,
-    })),
+    summary: protectedProcedure.query(async ({ ctx }) => {
+      const wallet = process.env.DATABASE_URL?.startsWith("postgres")
+        ? await getUserWalletSummary(ctx.user.id)
+        : { currency: "NGN" as const, balance: 0, entries: 0 };
+      return {
+        user: ctx.user.name ?? "Customer",
+        balance: { NGN: wallet.balance, USD: 0 },
+        activeRequests: 0,
+        successRate: 0,
+        providerMode: "mock" as const,
+      };
+    }),
     smsOptions: protectedProcedure.query(async () => ({
       countries: await sms.getCountries(),
       services: await sms.getServices(),
@@ -45,12 +60,37 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ input, ctx }) => {
-        if (!checkRateLimit(`sms:${ctx.user.id}`, 5))
+        if (
+          !(await checkDistributedRateLimit(`subby:sms:${ctx.user.id}`, 5, 60))
+        )
           throw new Error("Request rate limit exceeded");
         const activation = await sms.buyActivation({
           ...input,
           userId: ctx.user.id,
         });
+        if (process.env.DATABASE_URL?.startsWith("postgres")) {
+          await persistActivation({
+            userId: ctx.user.id,
+            providerType: "MOCK",
+            countryCode: input.country,
+            serviceId: input.serviceId,
+            phoneNumber: activation.phoneNumber,
+            status: "WAITING",
+            quotedPriceMinor: 15000,
+            currency: "NGN",
+          });
+          await writeAuditLog({
+            actorUserId: ctx.user.id,
+            action: "sms.request.created",
+            targetType: "smsActivation",
+            targetId: activation.id,
+            metadata: {
+              mode: "mock",
+              country: input.country,
+              serviceId: input.serviceId,
+            },
+          });
+        }
         auditEvents.push(
           createAuditEvent({
             actorId: ctx.user.id,
@@ -72,12 +112,30 @@ export const appRouter = router({
     createMailInbox: protectedProcedure
       .input(z.object({ label: z.string().trim().min(2).max(40) }))
       .mutation(async ({ input, ctx }) => {
-        if (!checkRateLimit(`mail:${ctx.user.id}`, 5))
+        if (
+          !(await checkDistributedRateLimit(`subby:mail:${ctx.user.id}`, 5, 60))
+        )
           throw new Error("Request rate limit exceeded");
         const inbox = await mail.createTemporaryInbox({
           ...input,
           userId: ctx.user.id,
         });
+        if (process.env.DATABASE_URL?.startsWith("postgres")) {
+          await persistInbox({
+            userId: ctx.user.id,
+            address: inbox.address,
+            domain: "subby.demo",
+            status: "ACTIVE",
+            expiresAt: new Date(inbox.expiresAt),
+          });
+          await writeAuditLog({
+            actorUserId: ctx.user.id,
+            action: "mail.inbox.created",
+            targetType: "temporaryInbox",
+            targetId: inbox.id,
+            metadata: { mode: "mock", label: input.label },
+          });
+        }
         auditEvents.push(
           createAuditEvent({
             actorId: ctx.user.id,
@@ -89,9 +147,39 @@ export const appRouter = router({
         );
         return inbox;
       }),
-    ledger: protectedProcedure.query(() => ({
+    ledger: protectedProcedure.query(async ({ ctx }) => {
+      if (process.env.DATABASE_URL?.startsWith("postgres")) {
+        const wallet = await getUserWalletSummary(ctx.user.id);
+        return {
+          currency: wallet.currency,
+          balance: wallet.balance,
+          entries: await listUserLedger(ctx.user.id),
+        };
+      }
+      return {
+        currency: "NGN" as const,
+        balance: 0,
+        entries: [] as Array<{
+          id: string;
+          type: string;
+          amountMinor: number;
+          reason: string;
+          createdAt: string;
+        }>,
+      };
+    }),
+    demoLedgerDisabled: protectedProcedure.query(() => ({
+      disabled: true as const,
+    })),
+    legacyLedgerRemoved: protectedProcedure.query(() => ({
       currency: "NGN" as const,
-      balance: 24680,
+      balance: 0,
+      entries: [] as const,
+    })),
+    /* legacy example intentionally removed */
+    /* ledger: protectedProcedure.query(() => ({
+      currency: "NGN" as const,
+      balance: 0,
       entries: [
         {
           id: "led_001",
@@ -115,21 +203,43 @@ export const appRouter = router({
           createdAt: "Yesterday, 16:04",
         },
       ],
-    })),
+    })), */
   }),
   admin: router({
-    overview: adminProcedure.query(() => ({
-      users: 1482,
-      requestsToday: 326,
-      walletVolume: 1286400,
-      activeProviders: 2,
-      recentAudit: [
-        "Mock SMS provider health check passed",
-        "Manual review queue has 4 requests",
-        "No policy violations detected in the last 24 hours",
-      ],
-      auditEvents: auditEvents.slice(-20).reverse(),
-    })),
+    overview: adminProcedure.query(async () => {
+      const persistent = process.env.DATABASE_URL?.startsWith("postgres")
+        ? await getAdminMetrics()
+        : null;
+      return {
+        users: persistent?.users ?? 0,
+        requestsToday: persistent?.activations ?? 0,
+        walletVolume: persistent?.walletVolumeMinor ?? 0,
+        activeProviders: persistent?.providers ?? 0,
+        inboxes: persistent?.inboxes ?? 0,
+        recentAudit: persistent
+          ? [
+              `${persistent.providers} registered providers`,
+              `${persistent.inboxes} temporary inbox records`,
+              `${persistent.audits} persisted audit events`,
+            ]
+          : ["PostgreSQL metrics unavailable until DATABASE_URL is configured"],
+        auditEvents: persistent
+          ? await listAuditLogs(20, 0)
+          : auditEvents.slice(-20).reverse(),
+      };
+    }),
+    auditHistory: adminProcedure
+      .input(
+        z.object({
+          limit: z.number().int().min(1).max(100).default(50),
+          offset: z.number().int().min(0).default(0),
+        })
+      )
+      .query(async ({ input }) =>
+        process.env.DATABASE_URL?.startsWith("postgres")
+          ? listAuditLogs(input.limit, input.offset)
+          : auditEvents.slice(input.offset, input.offset + input.limit)
+      ),
   }),
 });
 

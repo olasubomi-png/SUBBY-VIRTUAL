@@ -52,7 +52,7 @@ describe("workspace authorization and validation", () => {
     });
     await expect(operator.admin.overview()).resolves.toMatchObject({
       users: expect.any(Number),
-      activeProviders: 2,
+      activeProviders: expect.any(Number),
     });
   });
 });

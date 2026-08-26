@@ -7,6 +7,10 @@ import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
+import { closeDb } from "../db";
+import { closeRedis } from "../redis";
+import { expireDemoResources } from "../jobs";
+import { sdk } from "./sdk";
 import { serveStatic, setupVite } from "./vite";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -36,6 +40,22 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  app.get("/health", (_req, res) =>
+    res
+      .status(200)
+      .json({ status: "ok", service: "subby-virtual", providerMode: "mock" })
+  );
+  app.post("/api/scheduled/cleanup", async (req, res) => {
+    try {
+      const user = await sdk.authenticateRequest(req);
+      if (!user.isCron) return res.status(403).json({ error: "cron-only" });
+      return res.json({ ok: true, result: await expireDemoResources() });
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "cleanup failed",
+      });
+    }
+  });
   // tRPC API
   app.use(
     "/api/trpc",
@@ -61,6 +81,13 @@ async function startServer() {
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
   });
+  const shutdown = async () => {
+    await closeRedis();
+    await closeDb();
+    server.close(() => process.exit(0));
+  };
+  process.once("SIGTERM", shutdown);
+  process.once("SIGINT", shutdown);
 }
 
 startServer().catch(console.error);

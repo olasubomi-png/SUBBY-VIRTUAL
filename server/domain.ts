@@ -70,6 +70,7 @@ export type MailMessage = {
 };
 
 export interface MailProvider {
+  healthCheck(): Promise<{ ok: boolean; detail: string }>;
   createTemporaryInbox(input: CreateInboxInput): Promise<TemporaryInbox>;
   getMessages(inboxId: string): Promise<MailMessage[]>;
   deleteInbox(inboxId: string): Promise<void>;
@@ -77,6 +78,9 @@ export interface MailProvider {
 }
 
 export class LocalDemoMailProvider implements MailProvider {
+  async healthCheck() {
+    return { ok: true, detail: "local demo inbox store reachable" };
+  }
   private readonly inboxes = new Map<string, TemporaryInbox>();
   async createTemporaryInbox(input: CreateInboxInput): Promise<TemporaryInbox> {
     const id = `inbox_${input.userId}_${Date.now()}`;
@@ -118,6 +122,7 @@ export class LocalDemoMailProvider implements MailProvider {
 }
 
 export type SMSProvider = {
+  healthCheck(): Promise<{ ok: boolean; detail: string }>;
   getCountries(): Promise<Array<{ code: string; name: string }>>;
   getServices(): Promise<Array<{ id: string; name: string }>>;
   getPricing(): Promise<
@@ -137,6 +142,9 @@ export type SMSProvider = {
 };
 
 export class MockSMSProvider implements SMSProvider {
+  async healthCheck() {
+    return { ok: true, detail: "mock activation store reachable" };
+  }
   private readonly activations = new Map<
     string,
     { createdAt: number; cancelled: boolean }
