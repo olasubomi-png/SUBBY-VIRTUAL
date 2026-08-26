@@ -1,28 +1,98 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router } from "./_core/trpc";
+import {
+  adminProcedure,
+  protectedProcedure,
+  publicProcedure,
+  router,
+} from "./_core/trpc";
+import { z } from "zod";
+import { LocalDemoMailProvider, MockSMSProvider } from "./domain";
+
+const sms = new MockSMSProvider();
+const mail = new LocalDemoMailProvider();
 
 export const appRouter = router({
-    // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return {
-        success: true,
-      } as const;
+      return { success: true } as const;
     }),
   }),
-
-  // TODO: add feature routers here, e.g.
-  // todo: router({
-  //   list: protectedProcedure.query(({ ctx }) =>
-  //     db.getUserTodos(ctx.user.id)
-  //   ),
-  // }),
+  workspace: router({
+    summary: protectedProcedure.query(({ ctx }) => ({
+      user: ctx.user.name ?? "Customer",
+      balance: { NGN: 24680, USD: 0 },
+      activeRequests: 2,
+      successRate: 98.4,
+      providerMode: "mock" as const,
+    })),
+    smsOptions: protectedProcedure.query(async () => ({
+      countries: await sms.getCountries(),
+      services: await sms.getServices(),
+      pricing: await sms.getPricing(),
+    })),
+    createSmsRequest: protectedProcedure
+      .input(
+        z.object({
+          country: z.string().min(2).max(3),
+          serviceId: z.string().min(2).max(40),
+        })
+      )
+      .mutation(async ({ input, ctx }) => ({
+        ...(await sms.buyActivation({ ...input, userId: ctx.user.id })),
+        audit: "Mock request created; no external provider contacted.",
+      })),
+    createMailInbox: protectedProcedure
+      .input(z.object({ label: z.string().trim().min(2).max(40) }))
+      .mutation(async ({ input, ctx }) =>
+        mail.createTemporaryInbox({ ...input, userId: ctx.user.id })
+      ),
+    ledger: protectedProcedure.query(() => ({
+      currency: "NGN" as const,
+      balance: 24680,
+      entries: [
+        {
+          id: "led_001",
+          type: "CREDIT",
+          amount: 8000,
+          reason: "Demo wallet top-up",
+          createdAt: "Today, 09:42",
+        },
+        {
+          id: "led_002",
+          type: "DEBIT",
+          amount: 150,
+          reason: "Account verification",
+          createdAt: "Today, 09:18",
+        },
+        {
+          id: "led_003",
+          type: "DEBIT",
+          amount: 80,
+          reason: "Sandbox testing",
+          createdAt: "Yesterday, 16:04",
+        },
+      ],
+    })),
+  }),
+  admin: router({
+    overview: adminProcedure.query(() => ({
+      users: 1482,
+      requestsToday: 326,
+      walletVolume: 1286400,
+      activeProviders: 2,
+      recentAudit: [
+        "Mock SMS provider health check passed",
+        "Manual review queue has 4 requests",
+        "No policy violations detected in the last 24 hours",
+      ],
+    })),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
