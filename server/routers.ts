@@ -9,6 +9,7 @@ import {
 } from "./_core/trpc";
 import { z } from "zod";
 import { LocalDemoMailProvider, MockSMSProvider } from "./domain";
+import type { DemoActivation, DemoInbox } from "./demoState";
 import { createAuditEvent, type AuditEvent } from "./security";
 import { checkDistributedRateLimit } from "./redis";
 import {
@@ -30,12 +31,20 @@ import {
   simulateSms,
 } from "./demoState";
 import {
+  cancelPersistentActivation,
+  completePersistentActivation,
+  expirePersistentInbox,
   getAdminMetrics,
+  getPersistentActivation,
+  getPersistentInbox,
   getUserWalletSummary,
   listAuditLogs,
   listUserLedger,
   persistActivation,
+  persistCompletedInboxMessage,
   persistInbox,
+  listPersistentActivations,
+  listPersistentInboxes,
   writeAuditLog,
 } from "./persistence";
 const sms = new MockSMSProvider();
@@ -106,30 +115,82 @@ export const appRouter = router({
           spentMinor: wallet.spentMinor,
         };
       }),
-    smsRequests: protectedProcedure.query(({ ctx }) =>
-      listActivations(ctx.user.id)
+    smsRequests: protectedProcedure.query(async ({ ctx }) =>
+      process.env.DATABASE_URL?.startsWith("postgres")
+        ? listPersistentActivations(ctx.user.id)
+        : listActivations(ctx.user.id)
     ),
     smsRequestDetail: protectedProcedure
       .input(z.object({ id: z.string().min(1).max(120) }))
-      .query(({ input, ctx }) => getActivation(ctx.user.id, input.id)),
+      .query(
+        async ({ input, ctx }): Promise<DemoActivation> =>
+          process.env.DATABASE_URL?.startsWith("postgres")
+            ? ((await getPersistentActivation(
+                ctx.user.id,
+                input.id
+              )) as DemoActivation)
+            : getActivation(ctx.user.id, input.id)
+      ),
     simulateSms: protectedProcedure
       .input(z.object({ id: z.string().min(1).max(120) }))
-      .mutation(({ input, ctx }) => simulateSms(ctx.user.id, input.id)),
+      .mutation(async ({ input, ctx }) => {
+        if (process.env.DATABASE_URL?.startsWith("postgres")) {
+          await completePersistentActivation({
+            userId: ctx.user.id,
+            externalId: input.id,
+            sender: "SUBBY-DEMO",
+            body: "Your simulated verification code is 482913.",
+            receivedAt: new Date(),
+          });
+          return getPersistentActivation(ctx.user.id, input.id);
+        }
+        return simulateSms(ctx.user.id, input.id);
+      }),
     cancelSms: protectedProcedure
       .input(z.object({ id: z.string().min(1).max(120) }))
-      .mutation(({ input, ctx }) => cancelSms(ctx.user.id, input.id)),
-    mailInboxes: protectedProcedure.query(({ ctx }) =>
-      listInboxes(ctx.user.id)
+      .mutation(async ({ input, ctx }) => {
+        if (process.env.DATABASE_URL?.startsWith("postgres"))
+          return cancelPersistentActivation(ctx.user.id, input.id);
+        return cancelSms(ctx.user.id, input.id);
+      }),
+    mailInboxes: protectedProcedure.query(async ({ ctx }) =>
+      process.env.DATABASE_URL?.startsWith("postgres")
+        ? listPersistentInboxes(ctx.user.id)
+        : listInboxes(ctx.user.id)
     ),
     mailInboxDetail: protectedProcedure
       .input(z.object({ id: z.string().min(1).max(120) }))
-      .query(({ input, ctx }) => getInbox(ctx.user.id, input.id)),
+      .query(
+        async ({ input, ctx }): Promise<DemoInbox> =>
+          process.env.DATABASE_URL?.startsWith("postgres")
+            ? ((await getPersistentInbox(ctx.user.id, input.id)) as DemoInbox)
+            : getInbox(ctx.user.id, input.id)
+      ),
     simulateEmail: protectedProcedure
       .input(z.object({ id: z.string().min(1).max(120) }))
-      .mutation(({ input, ctx }) => simulateEmail(ctx.user.id, input.id)),
+      .mutation(async ({ input, ctx }) => {
+        if (process.env.DATABASE_URL?.startsWith("postgres")) {
+          const inbox = await getPersistentInbox(ctx.user.id, input.id);
+          await persistCompletedInboxMessage({
+            userId: ctx.user.id,
+            externalId: input.id,
+            fromAddress: "hello@subby.demo",
+            toAddress: inbox.address,
+            subject: "Demo inbox message",
+            body: "This simulated email confirms your Phase 1 inbox is working.",
+            receivedAt: new Date(),
+          });
+          return getPersistentInbox(ctx.user.id, input.id);
+        }
+        return simulateEmail(ctx.user.id, input.id);
+      }),
     expireInbox: protectedProcedure
       .input(z.object({ id: z.string().min(1).max(120) }))
-      .mutation(({ input, ctx }) => expireInbox(ctx.user.id, input.id)),
+      .mutation(async ({ input, ctx }) => {
+        if (process.env.DATABASE_URL?.startsWith("postgres"))
+          return expirePersistentInbox(ctx.user.id, input.id);
+        return expireInbox(ctx.user.id, input.id);
+      }),
     smsOptions: protectedProcedure.query(async () => ({
       countries: await sms.getCountries(),
       services: await sms.getServices(),
@@ -169,6 +230,7 @@ export const appRouter = router({
         if (process.env.DATABASE_URL?.startsWith("postgres")) {
           await persistActivation({
             userId: ctx.user.id,
+            externalId: demoActivation.id,
             providerType: "MOCK",
             countryCode: input.country,
             serviceId: input.serviceId,
@@ -224,6 +286,7 @@ export const appRouter = router({
         if (process.env.DATABASE_URL?.startsWith("postgres")) {
           await persistInbox({
             userId: ctx.user.id,
+            externalId: demoInbox.id,
             address: inbox.address,
             domain: "subby.demo",
             status: "ACTIVE",

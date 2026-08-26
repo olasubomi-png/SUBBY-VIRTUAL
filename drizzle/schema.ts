@@ -68,6 +68,7 @@ export const transactions = pgTable("transactions", {
 });
 export const smsActivations = pgTable("smsActivations", {
   id: serial("id").primaryKey(),
+  externalId: varchar("externalId", { length: 120 }).unique(),
   userId: integer("userId").notNull(),
   providerId: integer("providerId"),
   providerType: varchar("providerType", { length: 16 })
@@ -88,13 +89,17 @@ export const smsActivations = pgTable("smsActivations", {
 });
 export const smsMessages = pgTable("smsMessages", {
   id: serial("id").primaryKey(),
-  activationId: integer("activationId").notNull(),
+  externalId: varchar("externalId", { length: 120 }).unique(),
+  activationId: integer("activationId").notNull().unique(),
   sender: varchar("sender", { length: 320 }).notNull().default("demo.sender"),
+  recipient: varchar("recipient", { length: 320 }),
+  source: varchar("source", { length: 32 }).notNull().default("MOCK"),
   body: text("body").notNull(),
   receivedAt: timestamp("receivedAt").defaultNow().notNull(),
 });
 export const temporaryInboxes = pgTable("temporaryInboxes", {
   id: serial("id").primaryKey(),
+  externalId: varchar("externalId", { length: 120 }).unique(),
   userId: integer("userId").notNull(),
   providerId: integer("providerId"),
   address: varchar("address", { length: 320 }).notNull().unique(),
@@ -106,8 +111,11 @@ export const temporaryInboxes = pgTable("temporaryInboxes", {
 });
 export const mailMessages = pgTable("mailMessages", {
   id: serial("id").primaryKey(),
+  externalId: varchar("externalId", { length: 120 }).unique(),
   inboxId: integer("inboxId").notNull(),
   fromAddress: varchar("fromAddress", { length: 320 }).notNull(),
+  toAddress: varchar("toAddress", { length: 320 }),
+  source: varchar("source", { length: 32 }).notNull().default("MOCK"),
   subject: varchar("subject", { length: 255 }).notNull(),
   body: text("body").notNull(),
   receivedAt: timestamp("receivedAt").defaultNow().notNull(),

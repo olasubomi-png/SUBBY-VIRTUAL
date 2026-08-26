@@ -186,6 +186,8 @@ export function getInbox(userId: number, id: string) {
 export function simulateEmail(userId: number, id: string) {
   const inbox = getInbox(userId, id);
   if (inbox.status !== "ACTIVE") throw new Error("Inbox is expired");
+  if (inbox.messages.length > 0)
+    throw new Error("Inbox already has a simulated message");
   inbox.messages.unshift({
     sender: "hello@subby.demo",
     subject: "Demo inbox message",

@@ -92,3 +92,26 @@ describe("Step 2 end-to-end demo flow", () => {
     ).rejects.toThrow("Inbox not found");
   });
 });
+
+describe("duplicate simulation protection", () => {
+  it("does not create duplicate fallback messages", async () => {
+    const caller = appRouter.createCaller(contextFor(7010));
+    await caller.workspace.addDemoCredits({
+      amountMinor: 100000,
+      requestId: "00000000-0000-4000-8000-000000000010",
+    });
+    const activation = await caller.workspace.createSmsRequest({
+      country: "NG",
+      serviceId: "verify",
+    });
+    await caller.workspace.simulateSms({ id: activation.id });
+    await expect(
+      caller.workspace.simulateSms({ id: activation.id })
+    ).rejects.toThrow("Invalid activation state");
+    const inbox = await caller.workspace.createMailInbox({ label: "dedupe" });
+    await caller.workspace.simulateEmail({ id: inbox.id });
+    await expect(
+      caller.workspace.simulateEmail({ id: inbox.id })
+    ).rejects.toThrow("Inbox already has a simulated message");
+  });
+});

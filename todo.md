@@ -122,3 +122,27 @@
 # Final action feedback correction
 
 - [x] Make create, cancel, simulate, and expire success messages action-specific and rerun validation
+
+# GitHub visibility and main-branch release
+
+- [x] Synchronize the latest validated project state to GitHub main
+- [x] Change SUBBY-VIRTUAL visibility to public as requested
+- [x] Verify the public repository and pushed main commit
+
+# Persistent message storage upgrade
+
+- [x] Audit existing message, mailbox, activation, wallet, audit, and migration models without duplicating tables
+- [x] Add or complete a PostgreSQL message persistence contract for email and SMS records
+- [x] Add transactional/idempotent persistence helpers for simulated email and SMS completion
+- [x] Wire persistent mailbox and activation detail/list procedures while preserving fallback boundaries
+- [x] Preserve admin message-body redaction and ownership/RBAC protections
+- [x] Add database-independent tests for persistence contracts, duplicate simulation, lifecycle failures, and fallback behavior
+- [x] Generate and review an additive migration; apply only if the configured database is reachable
+- [x] Update documentation for restart persistence, fallback behavior, migration procedure, and limitations
+- [x] Run pnpm lint, pnpm check, pnpm test, and pnpm build
+- [ ] Save a final checkpoint and report exact files, migration, persistence architecture, tests, commands, and limitations
+
+# Persistent message coverage follow-up
+
+- [x] Add deterministic duplicate SMS/email simulation tests and verify no duplicate fallback messages
+- [x] Add a persistence-contract test documenting PostgreSQL-only execution and safe unconfigured failure
