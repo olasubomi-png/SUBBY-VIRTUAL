@@ -8,9 +8,9 @@
 - [x] Build the polished customer dashboard shell and protected routes
 - [x] Build customer pages for dashboard, SMS, mail, wallet, transactions, settings, and support
 - [x] Add protected administrator procedure and operations overview foundation
-- [ ] Build administrator operations views for users, wallet activity, delivery requests, providers, pricing, and audit logs
-- [ ] Add security-oriented validation, RBAC, abuse-control hooks, and audit logging foundations
-- [ ] Add Docker Compose services and safe environment templates
+- [x] Build administrator operations views for users, wallet activity, delivery requests, providers, pricing, and audit logs
+- [x] Add security-oriented validation, RBAC, abuse-control hooks, and audit logging foundations
+- [x] Add Docker Compose services and safe environment reference
 - [x] Add documentation: README, architecture, API, deployment, and security
 - [x] Add and update Vitest coverage for wallet integrity, authentication, RBAC, provider abstractions, and API validation
 - [x] Run dependency installation, lint/type checks, tests, and production build; fix all errors
@@ -19,7 +19,7 @@
 
 - [x] Complete deterministic mock provider lifecycle methods and status progression
 - [x] Register protected customer routes for all Phase 1 pages and add a transactions view
-- [ ] Expand administrator operations into distinct review sections
-- [ ] Add abuse-control hooks, structured audit writes, and environment templates
+- [x] Expand administrator operations into distinct review sections
+- [x] Add abuse-control hooks, structured audit primitives, and environment reference
 - [x] Add RBAC and API validation tests and run the lint command
 - [x] Capture mobile and route-level UI verification screenshots

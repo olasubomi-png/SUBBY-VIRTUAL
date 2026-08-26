@@ -561,6 +561,38 @@ function Transactions() {
 }
 
 function Admin() {
+  const sections = [
+    [
+      "Users",
+      "1,482 active · 6 suspended",
+      "Review account status and role assignments",
+    ],
+    [
+      "Wallet ledger",
+      "₦1.28m volume · 0 exceptions",
+      "Trace credits, debits, refunds, and adjustments",
+    ],
+    [
+      "Delivery requests",
+      "326 today · 4 in review",
+      "Inspect mock SMS and mail request status",
+    ],
+    [
+      "Providers",
+      "2 active · mock mode",
+      "Check provider health and operating mode",
+    ],
+    [
+      "Pricing",
+      "3 SMS rules · 2 mail rules",
+      "Review safe Phase 1 pricing rules",
+    ],
+    [
+      "Audit logs",
+      "No policy alerts · 24h",
+      "Review structured operational events",
+    ],
+  ];
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div>
@@ -605,36 +637,26 @@ function Admin() {
           accent="emerald"
         />
       </div>
-      <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
-        <CardHeader>
-          <CardTitle className="text-base text-white">
-            Operational queue
-          </CardTitle>
-          <p className="mt-1 text-xs text-slate-500">
-            Recent audit signals and review items
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {[
-            "Mock SMS provider health check passed",
-            "Manual review queue has 4 requests",
-            "No policy violations detected in the last 24 hours",
-          ].map((item, index) => (
-            <div
-              key={item}
-              className="flex items-center gap-3 rounded-xl border border-white/[0.06] p-4"
-            >
-              <div className="grid h-8 w-8 place-items-center rounded-lg bg-cyan-300/10 text-cyan-300">
-                <Check className="h-4 w-4" />
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {sections.map(([title, metric, detail]) => (
+          <Card
+            key={title}
+            className="border-white/[0.07] bg-[#10131c] shadow-none transition hover:border-cyan-300/20"
+          >
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between">
+                <div className="grid h-9 w-9 place-items-center rounded-lg bg-cyan-300/10 text-cyan-300">
+                  <ShieldCheck className="h-4 w-4" />
+                </div>
+                <ArrowUpRight className="h-4 w-4 text-slate-600" />
               </div>
-              <p className="flex-1 text-sm text-slate-300">{item}</p>
-              <span className="text-[11px] text-slate-600">
-                {index === 1 ? "Review" : "System"}
-              </span>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+              <h3 className="mt-5 text-sm font-semibold text-white">{title}</h3>
+              <p className="mt-2 text-xs font-medium text-cyan-200">{metric}</p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">{detail}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }

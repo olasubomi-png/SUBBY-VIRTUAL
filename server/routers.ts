@@ -9,9 +9,10 @@ import {
 } from "./_core/trpc";
 import { z } from "zod";
 import { LocalDemoMailProvider, MockSMSProvider } from "./domain";
-
+import { checkRateLimit, createAuditEvent, type AuditEvent } from "./security";
 const sms = new MockSMSProvider();
 const mail = new LocalDemoMailProvider();
+const auditEvents: AuditEvent[] = [];
 
 export const appRouter = router({
   system: systemRouter,
@@ -43,15 +44,51 @@ export const appRouter = router({
           serviceId: z.string().min(2).max(40),
         })
       )
-      .mutation(async ({ input, ctx }) => ({
-        ...(await sms.buyActivation({ ...input, userId: ctx.user.id })),
-        audit: "Mock request created; no external provider contacted.",
-      })),
+      .mutation(async ({ input, ctx }) => {
+        if (!checkRateLimit(`sms:${ctx.user.id}`, 5))
+          throw new Error("Request rate limit exceeded");
+        const activation = await sms.buyActivation({
+          ...input,
+          userId: ctx.user.id,
+        });
+        auditEvents.push(
+          createAuditEvent({
+            actorId: ctx.user.id,
+            action: "sms.request.created",
+            targetType: "smsActivation",
+            targetId: activation.id,
+            metadata: {
+              mode: "mock",
+              country: input.country,
+              serviceId: input.serviceId,
+            },
+          })
+        );
+        return {
+          ...activation,
+          audit: "Mock request created; no external provider contacted.",
+        };
+      }),
     createMailInbox: protectedProcedure
       .input(z.object({ label: z.string().trim().min(2).max(40) }))
-      .mutation(async ({ input, ctx }) =>
-        mail.createTemporaryInbox({ ...input, userId: ctx.user.id })
-      ),
+      .mutation(async ({ input, ctx }) => {
+        if (!checkRateLimit(`mail:${ctx.user.id}`, 5))
+          throw new Error("Request rate limit exceeded");
+        const inbox = await mail.createTemporaryInbox({
+          ...input,
+          userId: ctx.user.id,
+        });
+        auditEvents.push(
+          createAuditEvent({
+            actorId: ctx.user.id,
+            action: "mail.inbox.created",
+            targetType: "temporaryInbox",
+            targetId: inbox.id,
+            metadata: { mode: "mock", label: input.label },
+          })
+        );
+        return inbox;
+      }),
     ledger: protectedProcedure.query(() => ({
       currency: "NGN" as const,
       balance: 24680,
@@ -91,6 +128,7 @@ export const appRouter = router({
         "Manual review queue has 4 requests",
         "No policy violations detected in the last 24 hours",
       ],
+      auditEvents: auditEvents.slice(-20).reverse(),
     })),
   }),
 });

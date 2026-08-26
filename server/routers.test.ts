@@ -30,6 +30,20 @@ describe("workspace authorization and validation", () => {
       caller.workspace.createSmsRequest({ country: "", serviceId: "x" })
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
+  it("blocks repeated SMS requests after the abuse-control threshold", async () => {
+    const caller = appRouter.createCaller({
+      ...base,
+      user: { ...user, id: 99 },
+    });
+    for (let attempt = 0; attempt < 5; attempt += 1)
+      await caller.workspace.createSmsRequest({
+        country: "NG",
+        serviceId: "verify",
+      });
+    await expect(
+      caller.workspace.createSmsRequest({ country: "NG", serviceId: "verify" })
+    ).rejects.toThrow("Request rate limit exceeded");
+  });
   it("allows admin-only overview only for administrators", async () => {
     const customer = appRouter.createCaller({ ...base, user });
     const operator = appRouter.createCaller({ ...base, user: admin });
