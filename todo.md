@@ -140,7 +140,7 @@
 - [x] Generate and review an additive migration; apply only if the configured database is reachable
 - [x] Update documentation for restart persistence, fallback behavior, migration procedure, and limitations
 - [x] Run pnpm lint, pnpm check, pnpm test, and pnpm build
-- [ ] Save a final checkpoint and report exact files, migration, persistence architecture, tests, commands, and limitations
+- [x] Save a final checkpoint and report exact files, migration, persistence architecture, tests, commands, and limitations
 
 # Persistent message coverage follow-up
 
