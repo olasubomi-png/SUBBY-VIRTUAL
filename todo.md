@@ -101,7 +101,7 @@
 - [x] Verify frontend loading, empty, success, error, request-detail, copy, refresh, and lifecycle states against actual backend state
 - [x] Add missing authentication, wallet, SMS, mail, admin, security, invalid-transition, ownership, and input-validation tests
 - [x] Run pnpm check, pnpm test, pnpm build, and the project lint command; fix failures
-- [ ] Save a final checkpoint and report files changed, features, schema, API, frontend, tests, commands, results, and remaining Phase 1 work
+- [x] Save a final checkpoint and report files changed, features, schema, API, frontend, tests, commands, results, and remaining Phase 1 work
 
 # Lifecycle transition coverage
 
