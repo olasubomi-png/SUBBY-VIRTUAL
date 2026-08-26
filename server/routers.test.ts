@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
+import { addDemoCredits } from "./demoState";
 
 const base = { req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] };
 const user = {
@@ -35,6 +36,7 @@ describe("workspace authorization and validation", () => {
       ...base,
       user: { ...user, id: 99 },
     });
+    addDemoCredits(99, 100000, "router-rate-limit-seed");
     for (let attempt = 0; attempt < 5; attempt += 1)
       await caller.workspace.createSmsRequest({
         country: "NG",

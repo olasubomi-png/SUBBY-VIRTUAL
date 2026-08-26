@@ -37,7 +37,7 @@
 - [x] Add cross-user authorization, persistence-foundation, Redis-fallback, provider, realtime, and expiry test coverage
 - [x] Update VPS deployment documentation, health checks, graceful shutdown, and private service networking
 - [x] Run pnpm check, pnpm lint, pnpm test, and pnpm build with all failures fixed
-- [ ] Commit the upgrade to the existing private SUBBY-VIRTUAL repository and report the commit hash
+- [x] Commit the upgrade to the existing private SUBBY-VIRTUAL repository and report the commit hash
 
 # Upgrade hardening follow-up
 
@@ -58,3 +58,35 @@
 
 - [x] Add callable mock provider health evaluation with registry-state diagnostics
 - [x] Add controlled database-mock tests for ledger and persistence configuration boundaries plus cleanup behavior
+
+# Step 2 end-to-end demo upgrade
+
+- [x] Audit the current repository, scripts, runtime, tests, database, and existing user flows
+- [x] Generate and review the persistent Step 2 PostgreSQL migration and document the managed database TLS blocker and safe apply path
+- [x] Build server-authoritative demo-credit and wallet transaction procedures with idempotency and negative-balance protection in the demo fallback path
+- [x] Connect working mock SMS activation creation, simulated receipt, completion, ownership checks, and server-side ledger debit; persistent lifecycle write remains gated by database availability
+- [x] Connect working temporary mailbox creation, address display/copy-ready UI, simulated email receipt, refresh query, expiry metadata, and ownership checks; persistent lifecycle write remains gated by database availability
+- [x] Replace hard-coded wallet, activation, mailbox, and overview dashboard data with authenticated tRPC queries and mutations
+- [x] Complete protected admin activation, mailbox, wallet-ledger, audit, and live overview review procedures; full user search UI remains a follow-on enhancement
+- [x] Add meaningful cross-user authorization, wallet, SMS lifecycle, mail lifecycle, admin, and end-to-end UI-flow contract tests
+- [x] Generate and review the migration, document the managed migration boundary, and run pnpm check, pnpm lint, pnpm test, and pnpm build
+- [x] Commit Step 2 to the existing private SUBBY-VIRTUAL repository and report changed files, tests, build, and limitations
+
+# Step 2 final gap fixes
+
+- [x] Fix demo-credit idempotency so legitimate repeat top-ups are allowed while replayed requests remain safe
+- [x] Add copy, refresh, and expiry display controls to the temporary mailbox UI
+- [x] Remove remaining hard-coded overview and transaction data and use authenticated tRPC state everywhere
+- [x] Make non-persistent overview balance reflect the live demo wallet
+- [x] Document the managed PostgreSQL migration/TLS blocker and exact safe apply path
+- [x] Add protected admin detail queries for wallet ledger, activations, mailboxes, and audit records
+
+# Final summary fallback correction
+
+- [x] Return the live demo wallet balance from workspace.summary when PostgreSQL is unavailable
+- [x] Add a regression test proving summary balance follows demo credits in fallback mode
+
+# Step 2 release evidence
+
+- [x] Verify the Step 2 files exist on origin/main with a concrete commit hash
+- [x] Prepare and save the Step 2 release report with changed files, validation results, and limitations

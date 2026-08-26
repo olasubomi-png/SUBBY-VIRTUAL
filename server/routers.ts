@@ -12,6 +12,22 @@ import { LocalDemoMailProvider, MockSMSProvider } from "./domain";
 import { createAuditEvent, type AuditEvent } from "./security";
 import { checkDistributedRateLimit } from "./redis";
 import {
+  addDemoCredits,
+  createDemoActivation,
+  createDemoInbox,
+  debitDemoCredits,
+  getActivation,
+  getDemoWallet,
+  getInbox,
+  listActivations,
+  listAllActivations,
+  listAllInboxes,
+  listAllWallets,
+  listInboxes,
+  simulateEmail,
+  simulateSms,
+} from "./demoState";
+import {
   getAdminMetrics,
   getUserWalletSummary,
   listAuditLogs,
@@ -38,15 +54,68 @@ export const appRouter = router({
     summary: protectedProcedure.query(async ({ ctx }) => {
       const wallet = process.env.DATABASE_URL?.startsWith("postgres")
         ? await getUserWalletSummary(ctx.user.id)
-        : { currency: "NGN" as const, balance: 0, entries: 0 };
+        : {
+            currency: "NGN" as const,
+            balance: getDemoWallet(ctx.user.id).balanceMinor,
+            entries: getDemoWallet(ctx.user.id).ledger.length,
+          };
+      const activations = listActivations(ctx.user.id);
+      const inboxes = listInboxes(ctx.user.id);
+      const completed = activations.filter(
+        item => item.status === "COMPLETED"
+      ).length;
       return {
         user: ctx.user.name ?? "Customer",
         balance: { NGN: wallet.balance, USD: 0 },
-        activeRequests: 0,
-        successRate: 0,
+        activeRequests:
+          activations.filter(item => item.status === "ACTIVE").length +
+          inboxes.filter(item => item.status === "ACTIVE").length,
+        successRate: activations.length
+          ? Number(((completed / activations.length) * 100).toFixed(1))
+          : 0,
         providerMode: "mock" as const,
       };
     }),
+    wallet: protectedProcedure.query(({ ctx }) => {
+      const wallet = getDemoWallet(ctx.user.id);
+      return {
+        balanceMinor: wallet.balanceMinor,
+        creditsMinor: wallet.creditsMinor,
+        spentMinor: wallet.spentMinor,
+        ledger: wallet.ledger,
+      };
+    }),
+    addDemoCredits: protectedProcedure
+      .input(
+        z.object({
+          amountMinor: z.number().int().min(100).max(100000),
+          requestId: z.string().uuid(),
+        })
+      )
+      .mutation(({ input, ctx }) => {
+        const wallet = addDemoCredits(
+          ctx.user.id,
+          input.amountMinor,
+          `demo-credit-${ctx.user.id}-${input.requestId}`
+        );
+        return {
+          balanceMinor: wallet.balanceMinor,
+          creditsMinor: wallet.creditsMinor,
+          spentMinor: wallet.spentMinor,
+        };
+      }),
+    smsRequests: protectedProcedure.query(({ ctx }) =>
+      listActivations(ctx.user.id)
+    ),
+    simulateSms: protectedProcedure
+      .input(z.object({ id: z.string().min(1).max(120) }))
+      .mutation(({ input, ctx }) => simulateSms(ctx.user.id, input.id)),
+    mailInboxes: protectedProcedure.query(({ ctx }) =>
+      listInboxes(ctx.user.id)
+    ),
+    simulateEmail: protectedProcedure
+      .input(z.object({ id: z.string().min(1).max(120) }))
+      .mutation(({ input, ctx }) => simulateEmail(ctx.user.id, input.id)),
     smsOptions: protectedProcedure.query(async () => ({
       countries: await sms.getCountries(),
       services: await sms.getServices(),
@@ -64,9 +133,24 @@ export const appRouter = router({
           !(await checkDistributedRateLimit(`subby:sms:${ctx.user.id}`, 5, 60))
         )
           throw new Error("Request rate limit exceeded");
+        const pricing = await sms.getPricing();
+        const quote = pricing.find(item => item.serviceId === input.serviceId);
+        if (!quote) throw new Error("Unknown SMS service");
+        const wallet = debitDemoCredits(
+          ctx.user.id,
+          quote.amount,
+          `${quote.serviceId} demo activation`,
+          `sms-${ctx.user.id}-${Date.now()}`
+        );
         const activation = await sms.buyActivation({
           ...input,
           userId: ctx.user.id,
+        });
+        const demoActivation = createDemoActivation({
+          userId: ctx.user.id,
+          country: input.country,
+          serviceId: input.serviceId,
+          priceMinor: quote.amount,
         });
         if (process.env.DATABASE_URL?.startsWith("postgres")) {
           await persistActivation({
@@ -76,7 +160,7 @@ export const appRouter = router({
             serviceId: input.serviceId,
             phoneNumber: activation.phoneNumber,
             status: "WAITING",
-            quotedPriceMinor: 15000,
+            quotedPriceMinor: quote.amount,
             currency: "NGN",
           });
           await writeAuditLog({
@@ -105,7 +189,9 @@ export const appRouter = router({
           })
         );
         return {
-          ...activation,
+          ...demoActivation,
+          providerActivationId: activation.id,
+          walletBalanceMinor: wallet.balanceMinor,
           audit: "Mock request created; no external provider contacted.",
         };
       }),
@@ -120,6 +206,7 @@ export const appRouter = router({
           ...input,
           userId: ctx.user.id,
         });
+        const demoInbox = createDemoInbox(ctx.user.id, input.label);
         if (process.env.DATABASE_URL?.startsWith("postgres")) {
           await persistInbox({
             userId: ctx.user.id,
@@ -145,7 +232,7 @@ export const appRouter = router({
             metadata: { mode: "mock", label: input.label },
           })
         );
-        return inbox;
+        return demoInbox;
       }),
     ledger: protectedProcedure.query(async ({ ctx }) => {
       if (process.env.DATABASE_URL?.startsWith("postgres")) {
@@ -228,6 +315,9 @@ export const appRouter = router({
           : auditEvents.slice(-20).reverse(),
       };
     }),
+    activations: adminProcedure.query(() => listAllActivations()),
+    inboxes: adminProcedure.query(() => listAllInboxes()),
+    walletLedger: adminProcedure.query(() => listAllWallets()),
     auditHistory: adminProcedure
       .input(
         z.object({

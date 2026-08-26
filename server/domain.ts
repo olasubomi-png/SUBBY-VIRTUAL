@@ -165,9 +165,9 @@ export class MockSMSProvider implements SMSProvider {
   }
   async getPricing() {
     return [
-      { serviceId: "verify", amount: 150, currency: "NGN" as const },
-      { serviceId: "alerts", amount: 120, currency: "NGN" as const },
-      { serviceId: "sandbox", amount: 80, currency: "NGN" as const },
+      { serviceId: "verify", amount: 15000, currency: "NGN" as const },
+      { serviceId: "alerts", amount: 12000, currency: "NGN" as const },
+      { serviceId: "sandbox", amount: 8000, currency: "NGN" as const },
     ];
   }
   async buyActivation(_input: {
