@@ -146,3 +146,13 @@
 
 - [x] Add deterministic duplicate SMS/email simulation tests and verify no duplicate fallback messages
 - [x] Add a persistence-contract test documenting PostgreSQL-only execution and safe unconfigured failure
+
+# PostgreSQL production-readiness continuation
+
+- [x] Add explicit server-side persistence-mode detection that distinguishes PostgreSQL, unavailable PostgreSQL, and development fallback without silently downgrading production
+- [x] Add a protected admin database health/status procedure with safe reachability and migration metadata fields
+- [x] Harden PostgreSQL connection initialization and error handling so credentials are never logged and availability is not overstated
+- [x] Add database-independent tests for persistence-mode detection, health redaction, and safe database failure behavior
+- [x] Update deployment documentation with the exact PostgreSQL migration, verification, and restart-persistence runbook
+- [x] Run pnpm lint, pnpm check, pnpm test, and pnpm build after the readiness changes
+- [ ] Save a new checkpoint and synchronize the readiness update to GitHub

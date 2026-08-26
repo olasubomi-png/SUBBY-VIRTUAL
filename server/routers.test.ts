@@ -46,6 +46,22 @@ describe("workspace authorization and validation", () => {
       caller.workspace.createSmsRequest({ country: "NG", serviceId: "verify" })
     ).rejects.toThrow("Request rate limit exceeded");
   });
+  it("exposes safe database health only to administrators", async () => {
+    const customer = appRouter.createCaller({ ...base, user });
+    const operator = appRouter.createCaller({ ...base, user: admin });
+    await expect(customer.admin.databaseHealth()).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    const health = await operator.admin.databaseHealth();
+    expect(health).toMatchObject({
+      configured: expect.any(Boolean),
+      reachable: expect.any(Boolean),
+      persistenceMode: expect.any(String),
+      migrationState: "not-inspected",
+    });
+    expect(JSON.stringify(health)).not.toContain("DATABASE_URL");
+    expect(JSON.stringify(health)).not.toContain("password");
+  });
   it("allows admin-only overview only for administrators", async () => {
     const customer = appRouter.createCaller({ ...base, user });
     const operator = appRouter.createCaller({ ...base, user: admin });

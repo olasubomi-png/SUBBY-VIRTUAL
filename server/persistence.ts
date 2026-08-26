@@ -28,8 +28,16 @@ export async function ensureWallet(
   const created = await db
     .insert(wallets)
     .values({ userId, currency })
+    .onConflictDoNothing()
     .returning();
-  return created[0];
+  if (created[0]) return created[0];
+  const retried = await db
+    .select()
+    .from(wallets)
+    .where(and(eq(wallets.userId, userId), eq(wallets.currency, currency)))
+    .limit(1);
+  if (!retried[0]) throw new Error("Wallet could not be initialized");
+  return retried[0];
 }
 
 export async function getUserWalletSummary(userId: number) {
@@ -40,17 +48,88 @@ export async function getUserWalletSummary(userId: number) {
     .from(wallets)
     .where(and(eq(wallets.userId, userId), eq(wallets.currency, "NGN")))
     .limit(1);
-  if (!wallet[0]) return { currency: "NGN" as const, balance: 0, entries: 0 };
-  const balance = await getWalletBalance(wallet[0].id);
-  const entries = await db
-    .select({ count: sql<number>`count(*)` })
+  if (!wallet[0])
+    return {
+      currency: "NGN" as const,
+      balance: 0,
+      creditsMinor: 0,
+      spentMinor: 0,
+      entries: 0,
+    };
+  const ledger = await db
+    .select()
     .from(walletLedgerEntries)
     .where(eq(walletLedgerEntries.walletId, wallet[0].id));
+  const balance = ledger.reduce(
+    (total, entry) =>
+      total +
+      (entry.type === "CREDIT" ? entry.amountMinor : -entry.amountMinor),
+    0
+  );
+  const creditsMinor = ledger
+    .filter(entry => entry.type === "CREDIT")
+    .reduce((total, entry) => total + entry.amountMinor, 0);
+  const spentMinor = ledger
+    .filter(entry => entry.type === "DEBIT")
+    .reduce((total, entry) => total + entry.amountMinor, 0);
   return {
     currency: "NGN" as const,
     balance,
-    entries: Number(entries[0]?.count ?? 0),
+    creditsMinor,
+    spentMinor,
+    entries: ledger.length,
   };
+}
+
+export async function getPersistentWallet(userId: number) {
+  const summary = await getUserWalletSummary(userId);
+  const ledger = await listUserLedger(userId);
+  return {
+    balanceMinor: summary.balance,
+    creditsMinor: summary.creditsMinor,
+    spentMinor: summary.spentMinor,
+    ledger: ledger.map(entry => ({
+      id: String(entry.id),
+      type: entry.type as "CREDIT" | "DEBIT",
+      amountMinor: entry.amountMinor,
+      description: entry.reason,
+      referenceId: entry.reference,
+      createdAt: entry.createdAt.toISOString(),
+    })),
+  };
+}
+
+export async function creditPersistentWallet(
+  userId: number,
+  amountMinor: number,
+  reference: string
+) {
+  const wallet = await ensureWallet(userId, "NGN");
+  await appendLedgerEntry({
+    walletId: wallet.id,
+    type: "CREDIT",
+    amountMinor,
+    reason: "Demo credits",
+    reference,
+  });
+  return getPersistentWallet(userId);
+}
+
+export async function debitPersistentWallet(
+  userId: number,
+  amountMinor: number,
+  reason: string,
+  reference: string
+) {
+  const wallet = await ensureWallet(userId, "NGN");
+  await appendLedgerEntry({
+    walletId: wallet.id,
+    type: "DEBIT",
+    amountMinor,
+    reason,
+    reference,
+  });
+  return getPersistentWallet(userId);
 }
 
 export async function listUserLedger(userId: number, limit = 50, offset = 0) {
@@ -68,6 +147,23 @@ export async function listUserLedger(userId: number, limit = 50, offset = 0) {
     .where(eq(walletLedgerEntries.walletId, wallet[0].id))
     .limit(Math.min(limit, 100))
     .offset(Math.max(offset, 0));
+}
+
+export async function listPersistentWalletLedgers() {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const rows = await db.select().from(wallets);
+  return Promise.all(
+    rows.map(async wallet => ({
+      walletId: wallet.id,
+      userId: wallet.userId,
+      currency: wallet.currency,
+      entries: await db
+        .select()
+        .from(walletLedgerEntries)
+        .where(eq(walletLedgerEntries.walletId, wallet.id)),
+    }))
+  );
 }
 
 export async function getWalletBalance(walletId: number) {
@@ -377,6 +473,33 @@ export async function listPersistentActivations(userId: number) {
   );
 }
 
+export async function listPersistentAdminActivations() {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const rows = await db.select().from(smsActivations);
+  return Promise.all(
+    rows.map(async row => {
+      const messages = await db
+        .select()
+        .from(smsMessages)
+        .where(eq(smsMessages.activationId, row.id))
+        .limit(1);
+      return {
+        id: row.externalId ?? String(row.id),
+        userId: row.userId,
+        country: row.countryCode,
+        serviceId: row.serviceId,
+        phoneNumber: row.phoneNumber ?? "",
+        status: row.status,
+        priceMinor: row.quotedPriceMinor,
+        createdAt: row.createdAt.toISOString(),
+        expiresAt: row.expiresAt?.toISOString() ?? row.createdAt.toISOString(),
+        hasMessage: Boolean(messages[0]),
+      };
+    })
+  );
+}
+
 export async function listPersistentInboxes(userId: number) {
   const db = await getDb();
   if (!db) throw new Error("DATABASE_URL is not configured");
@@ -403,6 +526,28 @@ export async function listPersistentInboxes(userId: number) {
         body: message.body,
         receivedAt: message.receivedAt.toISOString(),
       })),
+    }))
+  );
+}
+
+export async function listPersistentAdminInboxes() {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const rows = await db.select().from(temporaryInboxes);
+  return Promise.all(
+    rows.map(async row => ({
+      id: row.externalId ?? String(row.id),
+      userId: row.userId,
+      address: row.address,
+      status: row.status,
+      createdAt: row.createdAt.toISOString(),
+      expiresAt: row.expiresAt.toISOString(),
+      messageCount: (
+        await db
+          .select()
+          .from(mailMessages)
+          .where(eq(mailMessages.inboxId, row.id))
+      ).length,
     }))
   );
 }

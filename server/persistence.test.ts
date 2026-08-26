@@ -56,6 +56,26 @@ describe("PostgreSQL persistence helpers", () => {
     expect(fake.inserted).toHaveLength(1);
   });
 
+  it("persists wallet credits with an idempotency reference", async () => {
+    const fake = createFakeDb();
+    getDb.mockResolvedValue(fake.db);
+    const { creditPersistentWallet } = await import("./persistence");
+    await creditPersistentWallet(8, 500, "demo-credit-8-request");
+    expect(fake.inserted).toContainEqual(
+      expect.objectContaining({
+        userId: 8,
+        currency: "NGN",
+      })
+    );
+    expect(fake.inserted).toContainEqual(
+      expect.objectContaining({
+        type: "CREDIT",
+        amountMinor: 500,
+        reference: "demo-credit-8-request",
+      })
+    );
+  });
+
   it("persists SMS and email message metadata with stable external IDs", async () => {
     const fake = createFakeDb();
     getDb.mockResolvedValue(fake.db);

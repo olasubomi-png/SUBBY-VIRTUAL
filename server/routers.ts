@@ -30,6 +30,8 @@ import {
   simulateEmail,
   simulateSms,
 } from "./demoState";
+import { getDatabaseHealth } from "./db";
+import { shouldUsePersistentStore } from "./persistenceMode";
 import {
   cancelPersistentActivation,
   completePersistentActivation,
@@ -37,8 +39,14 @@ import {
   getAdminMetrics,
   getPersistentActivation,
   getPersistentInbox,
+  getPersistentWallet,
   getUserWalletSummary,
+  creditPersistentWallet,
+  debitPersistentWallet,
   listAuditLogs,
+  listPersistentAdminActivations,
+  listPersistentAdminInboxes,
+  listPersistentWalletLedgers,
   listUserLedger,
   persistActivation,
   persistCompletedInboxMessage,
@@ -63,15 +71,20 @@ export const appRouter = router({
   }),
   workspace: router({
     summary: protectedProcedure.query(async ({ ctx }) => {
-      const wallet = process.env.DATABASE_URL?.startsWith("postgres")
+      const wallet = shouldUsePersistentStore()
         ? await getUserWalletSummary(ctx.user.id)
         : {
             currency: "NGN" as const,
             balance: getDemoWallet(ctx.user.id).balanceMinor,
             entries: getDemoWallet(ctx.user.id).ledger.length,
           };
-      const activations = listActivations(ctx.user.id);
-      const inboxes = listInboxes(ctx.user.id);
+      const persistent = shouldUsePersistentStore();
+      const activations = persistent
+        ? await listPersistentActivations(ctx.user.id)
+        : listActivations(ctx.user.id);
+      const inboxes = persistent
+        ? await listPersistentInboxes(ctx.user.id)
+        : listInboxes(ctx.user.id);
       const completed = activations.filter(
         item => item.status === "COMPLETED"
       ).length;
@@ -87,8 +100,10 @@ export const appRouter = router({
         providerMode: "mock" as const,
       };
     }),
-    wallet: protectedProcedure.query(({ ctx }) => {
-      const wallet = getDemoWallet(ctx.user.id);
+    wallet: protectedProcedure.query(async ({ ctx }) => {
+      const wallet = shouldUsePersistentStore()
+        ? await getPersistentWallet(ctx.user.id)
+        : getDemoWallet(ctx.user.id);
       return {
         balanceMinor: wallet.balanceMinor,
         creditsMinor: wallet.creditsMinor,
@@ -103,12 +118,15 @@ export const appRouter = router({
           requestId: z.string().uuid(),
         })
       )
-      .mutation(({ input, ctx }) => {
-        const wallet = addDemoCredits(
-          ctx.user.id,
-          input.amountMinor,
-          `demo-credit-${ctx.user.id}-${input.requestId}`
-        );
+      .mutation(async ({ input, ctx }) => {
+        const reference = `demo-credit-${ctx.user.id}-${input.requestId}`;
+        const wallet = shouldUsePersistentStore()
+          ? await creditPersistentWallet(
+              ctx.user.id,
+              input.amountMinor,
+              reference
+            )
+          : addDemoCredits(ctx.user.id, input.amountMinor, reference);
         return {
           balanceMinor: wallet.balanceMinor,
           creditsMinor: wallet.creditsMinor,
@@ -116,7 +134,7 @@ export const appRouter = router({
         };
       }),
     smsRequests: protectedProcedure.query(async ({ ctx }) =>
-      process.env.DATABASE_URL?.startsWith("postgres")
+      shouldUsePersistentStore()
         ? listPersistentActivations(ctx.user.id)
         : listActivations(ctx.user.id)
     ),
@@ -124,7 +142,7 @@ export const appRouter = router({
       .input(z.object({ id: z.string().min(1).max(120) }))
       .query(
         async ({ input, ctx }): Promise<DemoActivation> =>
-          process.env.DATABASE_URL?.startsWith("postgres")
+          shouldUsePersistentStore()
             ? ((await getPersistentActivation(
                 ctx.user.id,
                 input.id
@@ -134,7 +152,7 @@ export const appRouter = router({
     simulateSms: protectedProcedure
       .input(z.object({ id: z.string().min(1).max(120) }))
       .mutation(async ({ input, ctx }) => {
-        if (process.env.DATABASE_URL?.startsWith("postgres")) {
+        if (shouldUsePersistentStore()) {
           await completePersistentActivation({
             userId: ctx.user.id,
             externalId: input.id,
@@ -149,12 +167,12 @@ export const appRouter = router({
     cancelSms: protectedProcedure
       .input(z.object({ id: z.string().min(1).max(120) }))
       .mutation(async ({ input, ctx }) => {
-        if (process.env.DATABASE_URL?.startsWith("postgres"))
+        if (shouldUsePersistentStore())
           return cancelPersistentActivation(ctx.user.id, input.id);
         return cancelSms(ctx.user.id, input.id);
       }),
     mailInboxes: protectedProcedure.query(async ({ ctx }) =>
-      process.env.DATABASE_URL?.startsWith("postgres")
+      shouldUsePersistentStore()
         ? listPersistentInboxes(ctx.user.id)
         : listInboxes(ctx.user.id)
     ),
@@ -162,14 +180,14 @@ export const appRouter = router({
       .input(z.object({ id: z.string().min(1).max(120) }))
       .query(
         async ({ input, ctx }): Promise<DemoInbox> =>
-          process.env.DATABASE_URL?.startsWith("postgres")
+          shouldUsePersistentStore()
             ? ((await getPersistentInbox(ctx.user.id, input.id)) as DemoInbox)
             : getInbox(ctx.user.id, input.id)
       ),
     simulateEmail: protectedProcedure
       .input(z.object({ id: z.string().min(1).max(120) }))
       .mutation(async ({ input, ctx }) => {
-        if (process.env.DATABASE_URL?.startsWith("postgres")) {
+        if (shouldUsePersistentStore()) {
           const inbox = await getPersistentInbox(ctx.user.id, input.id);
           await persistCompletedInboxMessage({
             userId: ctx.user.id,
@@ -187,7 +205,7 @@ export const appRouter = router({
     expireInbox: protectedProcedure
       .input(z.object({ id: z.string().min(1).max(120) }))
       .mutation(async ({ input, ctx }) => {
-        if (process.env.DATABASE_URL?.startsWith("postgres"))
+        if (shouldUsePersistentStore())
           return expirePersistentInbox(ctx.user.id, input.id);
         return expireInbox(ctx.user.id, input.id);
       }),
@@ -211,12 +229,20 @@ export const appRouter = router({
         const pricing = await sms.getPricing();
         const quote = pricing.find(item => item.serviceId === input.serviceId);
         if (!quote) throw new Error("Unknown SMS service");
-        const wallet = debitDemoCredits(
-          ctx.user.id,
-          quote.amount,
-          `${quote.serviceId} demo activation`,
-          `sms-${ctx.user.id}-${Date.now()}`
-        );
+        const reference = `sms-${ctx.user.id}-${Date.now()}`;
+        const wallet = shouldUsePersistentStore()
+          ? await debitPersistentWallet(
+              ctx.user.id,
+              quote.amount,
+              `${quote.serviceId} demo activation`,
+              reference
+            )
+          : debitDemoCredits(
+              ctx.user.id,
+              quote.amount,
+              `${quote.serviceId} demo activation`,
+              reference
+            );
         const activation = await sms.buyActivation({
           ...input,
           userId: ctx.user.id,
@@ -227,7 +253,7 @@ export const appRouter = router({
           serviceId: input.serviceId,
           priceMinor: quote.amount,
         });
-        if (process.env.DATABASE_URL?.startsWith("postgres")) {
+        if (shouldUsePersistentStore()) {
           await persistActivation({
             userId: ctx.user.id,
             externalId: demoActivation.id,
@@ -283,7 +309,7 @@ export const appRouter = router({
           userId: ctx.user.id,
         });
         const demoInbox = createDemoInbox(ctx.user.id, input.label);
-        if (process.env.DATABASE_URL?.startsWith("postgres")) {
+        if (shouldUsePersistentStore()) {
           await persistInbox({
             userId: ctx.user.id,
             externalId: demoInbox.id,
@@ -312,7 +338,7 @@ export const appRouter = router({
         return demoInbox;
       }),
     ledger: protectedProcedure.query(async ({ ctx }) => {
-      if (process.env.DATABASE_URL?.startsWith("postgres")) {
+      if (shouldUsePersistentStore()) {
         const wallet = await getUserWalletSummary(ctx.user.id);
         return {
           currency: wallet.currency,
@@ -370,8 +396,9 @@ export const appRouter = router({
     })), */
   }),
   admin: router({
+    databaseHealth: adminProcedure.query(() => getDatabaseHealth()),
     overview: adminProcedure.query(async () => {
-      const persistent = process.env.DATABASE_URL?.startsWith("postgres")
+      const persistent = shouldUsePersistentStore()
         ? await getAdminMetrics()
         : null;
       return {
@@ -392,19 +419,25 @@ export const appRouter = router({
           : auditEvents.slice(-20).reverse(),
       };
     }),
-    activations: adminProcedure.query(() =>
-      listAllActivations().map(({ message, ...safe }) => ({
+    activations: adminProcedure.query(async () => {
+      if (shouldUsePersistentStore()) return listPersistentAdminActivations();
+      return listAllActivations().map(({ message, ...safe }) => ({
         ...safe,
         hasMessage: Boolean(message),
-      }))
-    ),
-    inboxes: adminProcedure.query(() =>
-      listAllInboxes().map(({ messages, ...safe }) => ({
+      }));
+    }),
+    inboxes: adminProcedure.query(async () => {
+      if (shouldUsePersistentStore()) return listPersistentAdminInboxes();
+      return listAllInboxes().map(({ messages, ...safe }) => ({
         ...safe,
         messageCount: messages.length,
-      }))
+      }));
+    }),
+    walletLedger: adminProcedure.query(async () =>
+      shouldUsePersistentStore()
+        ? listPersistentWalletLedgers()
+        : listAllWallets()
     ),
-    walletLedger: adminProcedure.query(() => listAllWallets()),
     auditHistory: adminProcedure
       .input(
         z.object({
@@ -413,7 +446,7 @@ export const appRouter = router({
         })
       )
       .query(async ({ input }) =>
-        process.env.DATABASE_URL?.startsWith("postgres")
+        shouldUsePersistentStore()
           ? listAuditLogs(input.limit, input.offset)
           : auditEvents.slice(input.offset, input.offset + input.limit)
       ),

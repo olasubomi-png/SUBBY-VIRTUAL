@@ -3,35 +3,97 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { InsertUser, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+import {
+  getConfiguredDatabaseMode,
+  getPersistenceModeLabel,
+} from "./persistenceMode";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: Pool | null = null;
 
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
+  const databaseUrl = process.env.DATABASE_URL;
+  const configuredMode = getConfiguredDatabaseMode(databaseUrl);
+  if (process.env.NODE_ENV === "production" && configuredMode !== "postgresql")
+    throw new Error("PostgreSQL DATABASE_URL is required in production");
+  if (!_db && databaseUrl && configuredMode === "postgresql") {
     try {
       _pool = new Pool({
-        connectionString: process.env.DATABASE_URL,
+        connectionString: databaseUrl,
         max: 10,
+        idleTimeoutMillis: 30_000,
+        connectionTimeoutMillis: 5_000,
         ssl:
-          process.env.DATABASE_URL.includes("localhost") ||
-          process.env.DATABASE_URL.includes("127.0.0.1")
+          databaseUrl.includes("localhost") || databaseUrl.includes("127.0.0.1")
             ? undefined
-            : { rejectUnauthorized: false },
+            : { rejectUnauthorized: true },
       });
+      _pool.on("error", () => {
+        console.warn("[Database] PostgreSQL connection error");
+      });
+      await _pool.query("select 1");
       _db = drizzle(_pool);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
+    } catch {
+      console.warn("[Database] PostgreSQL is unavailable");
+      if (_pool) await _pool.end().catch(() => undefined);
       _db = null;
+      _pool = null;
     }
   }
   return _db;
 }
 
+export async function getDatabaseHealth() {
+  const configuredMode = getConfiguredDatabaseMode(process.env.DATABASE_URL);
+  if (configuredMode !== "postgresql") {
+    return {
+      configured: configuredMode !== "fallback",
+      dialect: configuredMode === "fallback" ? "none" : "unsupported",
+      reachable: false,
+      persistenceMode: getPersistenceModeLabel(configuredMode, false),
+      migrationState: "not-inspected" as const,
+    };
+  }
+
+  await getDb();
+  if (!_pool) {
+    return {
+      configured: true,
+      dialect: "postgresql" as const,
+      reachable: false,
+      persistenceMode: "postgresql-unavailable" as const,
+      migrationState: "not-inspected" as const,
+    };
+  }
+
+  try {
+    await _pool.query("select 1");
+    return {
+      configured: true,
+      dialect: "postgresql" as const,
+      reachable: true,
+      persistenceMode: "postgresql" as const,
+      migrationState: "not-inspected" as const,
+    };
+  } catch {
+    return {
+      configured: true,
+      dialect: "postgresql" as const,
+      reachable: false,
+      persistenceMode: "postgresql-unavailable" as const,
+      migrationState: "not-inspected" as const,
+    };
+  }
+}
+
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) throw new Error("User openId is required for upsert");
   const db = await getDb();
-  if (!db) return;
+  if (!db) {
+    if (process.env.NODE_ENV === "production")
+      throw new Error("PostgreSQL database is unavailable");
+    return;
+  }
   const values: InsertUser = {
     openId: user.openId,
     name: user.name ?? null,
@@ -59,7 +121,11 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
-  if (!db) return undefined;
+  if (!db) {
+    if (process.env.NODE_ENV === "production")
+      throw new Error("PostgreSQL database is unavailable");
+    return undefined;
+  }
   const result = await db
     .select()
     .from(users)
