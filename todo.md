@@ -155,4 +155,28 @@
 - [x] Add database-independent tests for persistence-mode detection, health redaction, and safe database failure behavior
 - [x] Update deployment documentation with the exact PostgreSQL migration, verification, and restart-persistence runbook
 - [x] Run pnpm lint, pnpm check, pnpm test, and pnpm build after the readiness changes
-- [ ] Save a new checkpoint and synchronize the readiness update to GitHub
+- [x] Save a new checkpoint and synchronize the readiness update to GitHub
+
+# Admin user management continuation
+
+- [x] Add bounded server-side admin user search with deterministic pagination and safe empty results
+- [x] Add protected admin user detail data with wallet, SMS, mail, and audit summaries
+- [x] Preserve strict admin authorization, privacy redaction, and rate limiting for user management procedures
+- [x] Add Admin Users search, pagination, and detail views to the existing admin interface
+- [x] Add authorization, search, pagination, privacy, and persistent-database-path tests
+- [x] Document admin user-management behavior, available fields, and redaction rules
+- [x] Run pnpm lint, pnpm check, pnpm test, and pnpm build
+- [x] Save a checkpoint and synchronize the completed admin user-management feature to GitHub
+
+# Admin user-management evidence hardening
+
+- [x] Add explicit safe audit-metadata serialization that removes sensitive fields from user detail responses
+- [x] Add successful persistent search tests for ID/name/email, real multi-page pagination, and empty results
+- [x] Add user-detail privacy and ownership tests proving open IDs, secrets, message bodies, and unrelated user data are omitted
+- [x] Re-run validation, then save and synchronize the final admin user-management checkpoint
+
+# Admin user-management evidence correction
+
+- [x] Add a seeded multi-page persistent search test proving distinct bounded result sets and deterministic ordering across pages
+- [x] Add a seeded cross-user detail isolation test proving user A cannot receive user B wallet, activation, mailbox, message, or audit data
+- [x] Extend the detail privacy test across all response sections and keep the audit allowlist assertions

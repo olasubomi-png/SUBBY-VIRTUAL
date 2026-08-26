@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import {
   auditLogs,
   mailMessages,
@@ -471,6 +471,212 @@ export async function listPersistentActivations(userId: number) {
       };
     })
   );
+}
+
+const SAFE_ADMIN_AUDIT_KEYS = new Set([
+  "mode",
+  "country",
+  "serviceId",
+  "label",
+  "providerType",
+  "status",
+  "reason",
+  "amountMinor",
+  "currency",
+  "source",
+  "operation",
+  "count",
+  "result",
+]);
+
+export function serializeSafeAuditMetadata(
+  metadata: unknown
+): Record<string, string | number | boolean> {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata))
+    return {};
+  return Object.entries(metadata).reduce<
+    Record<string, string | number | boolean>
+  >((safe, [key, value]) => {
+    if (
+      SAFE_ADMIN_AUDIT_KEYS.has(key) &&
+      (typeof value === "string" ||
+        typeof value === "number" ||
+        typeof value === "boolean")
+    )
+      safe[key] = value;
+    return safe;
+  }, {});
+}
+
+export async function searchAdminUsers(query = "", page = 0, pageSize = 20) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const normalized = query.trim();
+  const conditions = normalized
+    ? [
+        ilike(users.name, `%${normalized}%`),
+        ilike(users.email, `%${normalized}%`),
+        ...(Number.isSafeInteger(Number(normalized))
+          ? [eq(users.id, Number(normalized))]
+          : []),
+      ]
+    : [];
+  const filter = conditions.length ? or(...conditions) : undefined;
+  const countRows = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(users)
+    .where(filter);
+  const total = Number(countRows[0]?.count ?? 0);
+  const rows = await db
+    .select()
+    .from(users)
+    .where(filter)
+    .orderBy(asc(users.createdAt), asc(users.id))
+    .limit(pageSize)
+    .offset(page * pageSize);
+  return {
+    items: rows.map(user => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      createdAt: user.createdAt.toISOString(),
+      lastSignedIn: user.lastSignedIn.toISOString(),
+    })),
+    page,
+    pageSize,
+    total,
+    totalPages: Math.ceil(total / pageSize),
+  };
+}
+
+export async function getAdminUserDetail(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const userRows = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  const user = userRows[0];
+  if (!user) throw new Error("User not found");
+  const [
+    wallet,
+    transactionsCount,
+    activationCounts,
+    inboxCounts,
+    smsMessageCount,
+    mailMessageCount,
+    auditRows,
+    recentLedger,
+  ] = await Promise.all([
+    getUserWalletSummary(userId),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(transactions)
+      .where(eq(transactions.userId, userId)),
+    db
+      .select({ status: smsActivations.status, count: sql<number>`count(*)` })
+      .from(smsActivations)
+      .where(eq(smsActivations.userId, userId))
+      .groupBy(smsActivations.status),
+    db
+      .select({ status: temporaryInboxes.status, count: sql<number>`count(*)` })
+      .from(temporaryInboxes)
+      .where(eq(temporaryInboxes.userId, userId))
+      .groupBy(temporaryInboxes.status),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(smsMessages)
+      .innerJoin(
+        smsActivations,
+        eq(smsMessages.activationId, smsActivations.id)
+      )
+      .where(eq(smsActivations.userId, userId)),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(mailMessages)
+      .innerJoin(
+        temporaryInboxes,
+        eq(mailMessages.inboxId, temporaryInboxes.id)
+      )
+      .where(eq(temporaryInboxes.userId, userId)),
+    db
+      .select({
+        action: auditLogs.action,
+        targetType: auditLogs.targetType,
+        targetId: auditLogs.targetId,
+        metadata: auditLogs.metadata,
+        createdAt: auditLogs.createdAt,
+      })
+      .from(auditLogs)
+      .where(eq(auditLogs.actorUserId, userId))
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(20),
+    listUserLedger(userId, 10, 0),
+  ]);
+  const activationSummary = Object.fromEntries(
+    activationCounts.map(item => [item.status, Number(item.count)])
+  );
+  const inboxSummary = Object.fromEntries(
+    inboxCounts.map(item => [item.status, Number(item.count)])
+  );
+  const totalActivations = activationCounts.reduce(
+    (total, item) => total + Number(item.count),
+    0
+  );
+  const totalInboxes = inboxCounts.reduce(
+    (total, item) => total + Number(item.count),
+    0
+  );
+  return {
+    account: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      createdAt: user.createdAt.toISOString(),
+      lastSignedIn: user.lastSignedIn.toISOString(),
+    },
+    wallet: {
+      balanceMinor: wallet.balance,
+      creditsMinor: wallet.creditsMinor,
+      spentMinor: wallet.spentMinor,
+      transactionCount: Number(transactionsCount[0]?.count ?? 0),
+      recentTransactions: recentLedger.map(entry => ({
+        type: entry.type,
+        amountMinor: entry.amountMinor,
+        reason: entry.reason,
+        reference: entry.reference,
+        createdAt: entry.createdAt.toISOString(),
+      })),
+    },
+    sms: {
+      total: totalActivations,
+      completed: activationSummary.COMPLETED ?? 0,
+      waiting: activationSummary.WAITING ?? 0,
+      active: activationSummary.ACTIVE ?? 0,
+      cancelled: activationSummary.CANCELLED ?? 0,
+      expired: activationSummary.EXPIRED ?? 0,
+      failed: activationSummary.FAILED ?? 0,
+      messageCount: Number(smsMessageCount[0]?.count ?? 0),
+    },
+    mail: {
+      mailboxCount: totalInboxes,
+      active: inboxSummary.ACTIVE ?? 0,
+      expired: inboxSummary.EXPIRED ?? 0,
+      messageCount: Number(mailMessageCount[0]?.count ?? 0),
+    },
+    activity: auditRows.map(item => ({
+      action: item.action,
+      targetType: item.targetType,
+      targetId: item.targetId,
+      metadata: serializeSafeAuditMetadata(item.metadata),
+      createdAt: item.createdAt.toISOString(),
+    })),
+  };
 }
 
 export async function listPersistentAdminActivations() {

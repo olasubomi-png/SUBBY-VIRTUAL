@@ -12,7 +12,7 @@ const journal = JSON.parse(
 };
 const snapshot = JSON.parse(
   readFileSync(
-    new URL("../drizzle/meta/0004_snapshot.json", import.meta.url),
+    new URL("../drizzle/meta/0005_snapshot.json", import.meta.url),
     "utf8"
   )
 ) as {
@@ -28,8 +28,10 @@ describe("PostgreSQL migration contract", () => {
   it("keeps the Drizzle journal ordered and PostgreSQL-specific", () => {
     expect(journal.dialect).toBe("postgresql");
     expect(snapshot.dialect).toBe("postgresql");
-    expect(journal.entries.map(entry => entry.idx)).toEqual([0, 1, 2, 3, 4]);
-    expect(journal.entries.at(-1)?.tag).toBe("0004_great_devos");
+    expect(journal.entries.map(entry => entry.idx)).toEqual(
+      journal.entries.map((_, index) => index)
+    );
+    expect(journal.entries.at(-1)?.tag).toBe("0005_closed_skullbuster");
   });
 
   it("matches message columns and uses additive unique constraints", () => {
@@ -52,5 +54,16 @@ describe("PostgreSQL migration contract", () => {
       'ADD CONSTRAINT "mailMessages_externalId_unique" UNIQUE("externalId")'
     );
     expect(migration).not.toMatch(/DROP TABLE|DROP COLUMN|CREATE TABLE/);
+  });
+
+  it("keeps admin user-search indexes additive and explicit", () => {
+    const indexMigration = readFileSync(
+      new URL("../drizzle/0005_closed_skullbuster.sql", import.meta.url),
+      "utf8"
+    );
+    expect(indexMigration).toContain('CREATE INDEX "users_email_search_idx"');
+    expect(indexMigration).toContain('CREATE INDEX "users_name_search_idx"');
+    expect(indexMigration).toContain('CREATE INDEX "users_created_order_idx"');
+    expect(indexMigration).not.toMatch(/DROP TABLE|DROP COLUMN|ALTER TABLE/);
   });
 });

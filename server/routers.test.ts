@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 import { addDemoCredits } from "./demoState";
@@ -17,6 +17,9 @@ const user = {
   lastSignedIn: new Date(),
 };
 const admin = { ...user, role: "admin" as const };
+
+beforeEach(() => vi.stubEnv("DATABASE_URL", ""));
+afterEach(() => vi.unstubAllEnvs());
 
 describe("workspace authorization and validation", () => {
   it("rejects anonymous workspace access", async () => {
@@ -86,6 +89,46 @@ describe("additional Phase 1 validation", () => {
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     await expect(
       caller.workspace.mailInboxDetail({ id: "" })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+});
+
+describe("admin user management", () => {
+  it("requires administrator authorization for search and detail", async () => {
+    const anonymous = appRouter.createCaller({ ...base, user: null });
+    const customer = appRouter.createCaller({ ...base, user });
+    const operator = appRouter.createCaller({ ...base, user: admin });
+    await expect(anonymous.admin.users({})).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(customer.admin.users({})).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(
+      customer.admin.userDetail({ userId: 7 })
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(operator.admin.users({})).resolves.toMatchObject({
+      items: [],
+      total: 0,
+      totalPages: 0,
+    });
+    await expect(operator.admin.userDetail({ userId: 7 })).rejects.toThrow(
+      "Persistent user management requires PostgreSQL"
+    );
+  });
+
+  it("bounds user search pagination and rejects invalid identifiers", async () => {
+    const operator = appRouter.createCaller({ ...base, user: admin });
+    await expect(
+      operator.admin.users({ query: "", page: 0, pageSize: 51 })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      operator.admin.users({ query: "", page: -1, pageSize: 10 })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      operator.admin.userDetail({ userId: 0 })
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });

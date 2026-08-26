@@ -8,6 +8,7 @@ import {
   ArrowUpRight,
   BarChart3,
   Check,
+  ChevronLeft,
   ChevronRight,
   CircleDollarSign,
   Inbox,
@@ -16,6 +17,7 @@ import {
   Menu,
   MessageSquareText,
   Plus,
+  Search,
   ShieldCheck,
   Sparkles,
   WalletCards,
@@ -64,11 +66,13 @@ const smsRequests = [
 function Sidebar({
   active,
   setActive,
+  isAdmin,
   mobileOpen,
   setMobileOpen,
 }: {
   active: string;
   setActive: (id: string) => void;
+  isAdmin: boolean;
   mobileOpen: boolean;
   setMobileOpen: (open: boolean) => void;
 }) {
@@ -97,37 +101,39 @@ function Sidebar({
           Workspace
         </div>
         <nav className="mt-3 space-y-1">
-          {nav.map(item => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                onClick={() => {
-                  setActive(item.id);
-                  setMobileOpen(false);
-                }}
-                className={cn(
-                  "group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium transition-all",
-                  active === item.id
-                    ? "bg-cyan-400/10 text-cyan-200 shadow-[inset_2px_0_0_#67e8f9]"
-                    : "text-slate-400 hover:bg-white/[0.04] hover:text-white"
-                )}
-              >
-                <Icon
+          {nav
+            .filter(item => isAdmin || item.id !== "admin")
+            .map(item => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setActive(item.id);
+                    setMobileOpen(false);
+                  }}
                   className={cn(
-                    "h-[18px] w-[18px]",
+                    "group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium transition-all",
                     active === item.id
-                      ? "text-cyan-300"
-                      : "text-slate-500 group-hover:text-slate-300"
+                      ? "bg-cyan-400/10 text-cyan-200 shadow-[inset_2px_0_0_#67e8f9]"
+                      : "text-slate-400 hover:bg-white/[0.04] hover:text-white"
                   )}
-                />
-                {item.label}
-                {active === item.id && (
-                  <ChevronRight className="ml-auto h-4 w-4" />
-                )}
-              </button>
-            );
-          })}
+                >
+                  <Icon
+                    className={cn(
+                      "h-[18px] w-[18px]",
+                      active === item.id
+                        ? "text-cyan-300"
+                        : "text-slate-500 group-hover:text-slate-300"
+                    )}
+                  />
+                  {item.label}
+                  {active === item.id && (
+                    <ChevronRight className="ml-auto h-4 w-4" />
+                  )}
+                </button>
+              );
+            })}
         </nav>
         <div className="mt-auto rounded-2xl border border-white/[0.08] bg-gradient-to-br from-indigo-500/10 to-cyan-400/5 p-4">
           <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-cyan-200">
@@ -962,6 +968,18 @@ function LegacyTransactions() {
 
 function Admin() {
   const overview = trpc.admin.overview.useQuery();
+  const [userSearch, setUserSearch] = useState("");
+  const [userPage, setUserPage] = useState(0);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const users = trpc.admin.users.useQuery({
+    query: userSearch,
+    page: userPage,
+    pageSize: 10,
+  });
+  const userDetail = trpc.admin.userDetail.useQuery(
+    { userId: selectedUserId ?? 0 },
+    { enabled: selectedUserId !== null }
+  );
   const activations = trpc.admin.activations.useQuery();
   const inboxes = trpc.admin.inboxes.useQuery();
   const walletLedger = trpc.admin.walletLedger.useQuery();
@@ -1045,6 +1063,304 @@ function Admin() {
           accent="emerald"
         />
       </div>
+      <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+        <CardHeader className="gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <CardTitle className="text-base text-white">
+                Admin Users
+              </CardTitle>
+              <p className="mt-1 text-xs text-slate-500">
+                Search by user ID, name, or email. Results are
+                server-authoritative.
+              </p>
+            </div>
+            <div className="relative w-full sm:max-w-xs">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+              <input
+                value={userSearch}
+                onChange={event => {
+                  setUserSearch(event.target.value);
+                  setUserPage(0);
+                }}
+                placeholder="Search users"
+                aria-label="Search users by ID, name, or email"
+                className="h-10 w-full rounded-lg border border-white/10 bg-white/[0.04] pl-9 pr-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-300/50 focus:ring-2 focus:ring-cyan-300/10"
+              />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {users.isLoading ? (
+            <p className="py-8 text-center text-sm text-slate-500">
+              Loading users…
+            </p>
+          ) : users.error ? (
+            <p className="rounded-lg border border-rose-300/20 bg-rose-300/5 p-4 text-sm text-rose-200">
+              {users.error.message || "Unable to load users."}
+            </p>
+          ) : users.data?.items.length ? (
+            <div className="overflow-x-auto">
+              <div className="min-w-[680px] divide-y divide-white/[0.06]">
+                <div className="grid grid-cols-[1.4fr_1.5fr_0.7fr_0.8fr_1.1fr_0.8fr] gap-3 px-3 pb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">
+                  <span>User</span>
+                  <span>Email</span>
+                  <span>Role</span>
+                  <span>Status</span>
+                  <span>Created</span>
+                  <span>Activity</span>
+                </div>
+                {users.data.items.map(user => (
+                  <button
+                    key={user.id}
+                    onClick={() => setSelectedUserId(user.id)}
+                    className="grid w-full grid-cols-[1.4fr_1.5fr_0.7fr_0.8fr_1.1fr_0.8fr] gap-3 rounded-lg px-3 py-4 text-left transition hover:bg-white/[0.04]"
+                  >
+                    <span className="truncate text-sm font-medium text-slate-200">
+                      {user.name || `User #${user.id}`}
+                    </span>
+                    <span className="truncate text-xs text-slate-400">
+                      {user.email || "—"}
+                    </span>
+                    <span className="text-xs text-cyan-200">{user.role}</span>
+                    <span className="text-xs text-slate-300">
+                      {user.status}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {new Date(user.createdAt).toLocaleDateString()}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {new Date(user.lastSignedIn).toLocaleDateString()}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="py-8 text-center text-sm text-slate-500">
+              {userSearch
+                ? "No users match this search."
+                : "No persistent users are available."}
+            </p>
+          )}
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] pt-4 text-xs text-slate-500">
+            <span>
+              {users.data?.total ?? 0} result
+              {users.data?.total === 1 ? "" : "s"}
+            </span>
+            <div className="flex items-center gap-2">
+              <span>
+                Page {(users.data?.page ?? userPage) + 1} of{" "}
+                {Math.max(users.data?.totalPages ?? 0, 1)}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={userPage === 0 || users.isLoading}
+                onClick={() => setUserPage(page => Math.max(0, page - 1))}
+                className="border-white/10 bg-transparent text-slate-300 hover:bg-white/[0.05]"
+                aria-label="Previous users page"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={
+                  !users.data ||
+                  userPage + 1 >= users.data.totalPages ||
+                  users.isLoading
+                }
+                onClick={() => setUserPage(page => page + 1)}
+                className="border-white/10 bg-transparent text-slate-300 hover:bg-white/[0.05]"
+                aria-label="Next users page"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      {selectedUserId !== null && (
+        <Card className="border-cyan-300/15 bg-[#10131c] shadow-none">
+          <CardHeader className="flex-row items-start justify-between">
+            <div>
+              <CardTitle className="text-base text-white">
+                User detail
+              </CardTitle>
+              <p className="mt-1 text-xs text-slate-500">
+                Operational metadata only; private message bodies remain
+                redacted.
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedUserId(null)}
+              className="text-slate-400 hover:bg-white/[0.05] hover:text-white"
+            >
+              Close
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {userDetail.isLoading ? (
+              <p className="py-6 text-sm text-slate-500">
+                Loading account detail…
+              </p>
+            ) : userDetail.error ? (
+              <p className="rounded-lg border border-rose-300/20 bg-rose-300/5 p-4 text-sm text-rose-200">
+                {userDetail.error.message || "Unable to load account detail."}
+              </p>
+            ) : userDetail.data ? (
+              <div className="space-y-5">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <p className="text-lg font-semibold text-white">
+                      {userDetail.data.account.name ||
+                        `User #${userDetail.data.account.id}`}
+                    </p>
+                    <p className="text-sm text-slate-400">
+                      {userDetail.data.account.email || "No email on record"}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 text-xs">
+                    <Badge className="bg-cyan-300/10 text-cyan-200">
+                      {userDetail.data.account.role}
+                    </Badge>
+                    <Badge className="bg-emerald-300/10 text-emerald-200">
+                      {userDetail.data.account.status}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <Metric
+                    icon={WalletCards}
+                    label="Balance"
+                    value={`₦${(userDetail.data.wallet.balanceMinor / 100).toFixed(2)}`}
+                    detail={`${userDetail.data.wallet.transactionCount} transactions`}
+                    accent="cyan"
+                  />
+                  <Metric
+                    icon={MessageSquareText}
+                    label="SMS requests"
+                    value={String(userDetail.data.sms.total)}
+                    detail={`${userDetail.data.sms.completed} completed · ${userDetail.data.sms.cancelled} cancelled`}
+                    accent="cyan"
+                  />
+                  <Metric
+                    icon={Inbox}
+                    label="Mailboxes"
+                    value={String(userDetail.data.mail.mailboxCount)}
+                    detail={`${userDetail.data.mail.messageCount} messages`}
+                    accent="emerald"
+                  />
+                  <Metric
+                    icon={BarChart3}
+                    label="Activity"
+                    value={String(userDetail.data.activity.length)}
+                    detail="Recent audit metadata"
+                    accent="cyan"
+                  />
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-xs text-slate-400">
+                    <p className="mb-3 font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      Account
+                    </p>
+                    <p>
+                      User ID:{" "}
+                      <span className="text-slate-200">
+                        {userDetail.data.account.id}
+                      </span>
+                    </p>
+                    <p className="mt-2">
+                      Created:{" "}
+                      <span className="text-slate-200">
+                        {new Date(
+                          userDetail.data.account.createdAt
+                        ).toLocaleString()}
+                      </span>
+                    </p>
+                    <p className="mt-2">
+                      Last activity:{" "}
+                      <span className="text-slate-200">
+                        {new Date(
+                          userDetail.data.account.lastSignedIn
+                        ).toLocaleString()}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-xs text-slate-400">
+                    <p className="mb-3 font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      Wallet
+                    </p>
+                    <p>
+                      Credits:{" "}
+                      <span className="text-emerald-200">
+                        ₦
+                        {(userDetail.data.wallet.creditsMinor / 100).toFixed(2)}
+                      </span>
+                    </p>
+                    <p className="mt-2">
+                      Debits:{" "}
+                      <span className="text-slate-200">
+                        ₦{(userDetail.data.wallet.spentMinor / 100).toFixed(2)}
+                      </span>
+                    </p>
+                    <div className="mt-3 border-t border-white/[0.06] pt-3">
+                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600">
+                        Recent ledger
+                      </p>
+                      {userDetail.data.wallet.recentTransactions.length ? (
+                        userDetail.data.wallet.recentTransactions.map(
+                          (entry, index) => (
+                            <p
+                              key={`${entry.reference}-${index}`}
+                              className="mt-1 truncate text-slate-500"
+                            >
+                              {entry.type} · ₦
+                              {(entry.amountMinor / 100).toFixed(2)} ·{" "}
+                              {new Date(entry.createdAt).toLocaleDateString()}
+                            </p>
+                          )
+                        )
+                      ) : (
+                        <p className="text-slate-600">No wallet history.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    Recent activity metadata
+                  </p>
+                  {userDetail.data.activity.length ? (
+                    <div className="space-y-2">
+                      {userDetail.data.activity.map((event, index) => (
+                        <div
+                          key={`${event.action}-${event.createdAt}-${index}`}
+                          className="flex flex-wrap justify-between gap-2 text-xs"
+                        >
+                          <span className="text-slate-300">
+                            {event.action} · {event.targetType || "system"}
+                          </span>
+                          <span className="text-slate-500">
+                            {new Date(event.createdAt).toLocaleString()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500">
+                      No activity metadata recorded.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      )}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {sections.map(([title, metric, detail]) => (
           <Card
@@ -1261,12 +1577,14 @@ export default function Home() {
       : location.slice(1) || "overview";
   const [active, setActive] = useState(initialSection);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const isAdmin = user?.role === "admin";
   const title = nav.find(n => n.id === active)?.label ?? "Overview";
   return (
     <div className="min-h-screen bg-[#080a0f] text-slate-200">
       <Sidebar
         active={active}
         setActive={setActive}
+        isAdmin={isAdmin}
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
       />
@@ -1302,7 +1620,18 @@ export default function Home() {
           {active === "wallet" && <Wallet />}
           {active === "activity" && <Wallet />}
           {active === "transactions" && <Transactions />}
-          {active === "admin" && <Admin />}
+          {active === "admin" && isAdmin ? (
+            <Admin />
+          ) : active === "admin" ? (
+            <div className="rounded-2xl border border-rose-300/20 bg-rose-300/5 p-8">
+              <h1 className="text-2xl font-semibold text-white">
+                Access restricted
+              </h1>
+              <p className="mt-2 text-sm text-rose-100/70">
+                Administrator authorization is required to view user management.
+              </p>
+            </div>
+          ) : null}
           {active === "settings" && (
             <div className="rounded-2xl border border-white/10 bg-[#10131c] p-8">
               <h1 className="text-2xl font-semibold text-white">Settings</h1>

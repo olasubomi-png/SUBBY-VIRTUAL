@@ -47,6 +47,8 @@ import {
   listPersistentAdminActivations,
   listPersistentAdminInboxes,
   listPersistentWalletLedgers,
+  searchAdminUsers,
+  getAdminUserDetail,
   listUserLedger,
   persistActivation,
   persistCompletedInboxMessage,
@@ -396,6 +398,48 @@ export const appRouter = router({
     })), */
   }),
   admin: router({
+    users: adminProcedure
+      .input(
+        z.object({
+          query: z.string().trim().max(120).default(""),
+          page: z.number().int().min(0).max(10000).default(0),
+          pageSize: z.number().int().min(1).max(50).default(20),
+        })
+      )
+      .query(async ({ input, ctx }) => {
+        if (
+          !(await checkDistributedRateLimit(
+            `subby:admin-users:${ctx.user.id}`,
+            60,
+            60
+          ))
+        )
+          throw new Error("Admin user search rate limit exceeded");
+        if (!shouldUsePersistentStore())
+          return {
+            items: [],
+            page: input.page,
+            pageSize: input.pageSize,
+            total: 0,
+            totalPages: 0,
+          };
+        return searchAdminUsers(input.query, input.page, input.pageSize);
+      }),
+    userDetail: adminProcedure
+      .input(z.object({ userId: z.number().int().positive() }))
+      .query(async ({ input, ctx }) => {
+        if (
+          !(await checkDistributedRateLimit(
+            `subby:admin-user-detail:${ctx.user.id}`,
+            60,
+            60
+          ))
+        )
+          throw new Error("Admin user detail rate limit exceeded");
+        if (!shouldUsePersistentStore())
+          throw new Error("Persistent user management requires PostgreSQL");
+        return getAdminUserDetail(input.userId);
+      }),
     databaseHealth: adminProcedure.query(() => getDatabaseHealth()),
     overview: adminProcedure.query(async () => {
       const persistent = shouldUsePersistentStore()
