@@ -90,3 +90,35 @@
 
 - [x] Verify the Step 2 files exist on origin/main with a concrete commit hash
 - [x] Prepare and save the Step 2 release report with changed files, validation results, and limitations
+
+# Phase 1 continuation from implementation brief
+
+- [x] Audit authentication, database, routers, providers, wallet, admin, frontend, error handling, authorization, and tests against the attached brief
+- [x] Verify safe server-side wallet/ledger behavior and document the managed PostgreSQL persistence boundary
+- [x] Verify mock SMS lifecycle including cancellation, invalid transitions, completion, and safe wallet activity
+- [x] Verify demo mail lifecycle including metadata, refresh, expiry, expiration, and ownership isolation
+- [x] Verify protected server-side admin aggregate metrics, detail procedures, and operational event visibility without exposing secrets or message content
+- [x] Verify frontend loading, empty, success, error, request-detail, copy, refresh, and lifecycle states against actual backend state
+- [x] Add missing authentication, wallet, SMS, mail, admin, security, invalid-transition, ownership, and input-validation tests
+- [x] Run pnpm check, pnpm test, pnpm build, and the project lint command; fix failures
+- [ ] Save a final checkpoint and report files changed, features, schema, API, frontend, tests, commands, results, and remaining Phase 1 work
+
+# Lifecycle transition coverage
+
+- [x] Add tests for SMS cancellation and invalid post-completion transitions
+- [x] Add tests for mailbox expiry and rejected post-expiry simulation
+
+# Final Phase 1 evidence fixes
+
+- [x] Redact admin inbox procedures to safe metadata and counts without exposing message bodies by default
+- [x] Add explicit frontend loading, success, and error states plus a dedicated server-backed request-detail view
+- [x] Add unauthenticated protected-procedure rejection and invalid SMS/mail/admin input tests
+
+# Final evidence corrections
+
+- [x] Add a dedicated request-detail surface with explicit success feedback for create, cancel, simulate, and expire actions
+- [x] Add invalid admin procedure input coverage for audit pagination
+
+# Final action feedback correction
+
+- [x] Make create, cancel, simulate, and expire success messages action-specific and rerun validation

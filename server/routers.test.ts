@@ -58,3 +58,30 @@ describe("workspace authorization and validation", () => {
     });
   });
 });
+
+describe("additional Phase 1 validation", () => {
+  it("rejects invalid mail and detail inputs", async () => {
+    const caller = appRouter.createCaller({ ...base, user });
+    await expect(
+      caller.workspace.createMailInbox({ label: "" })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      caller.workspace.smsRequestDetail({ id: "" })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      caller.workspace.mailInboxDetail({ id: "" })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+});
+
+describe("admin input validation", () => {
+  it("rejects invalid audit pagination", async () => {
+    const caller = appRouter.createCaller({ ...base, user: admin });
+    await expect(
+      caller.admin.auditHistory({ limit: 0, offset: 0 })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      caller.admin.auditHistory({ limit: 20, offset: -1 })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+});

@@ -143,12 +143,20 @@ export function getActivation(userId: number, id: string) {
 }
 export function simulateSms(userId: number, id: string) {
   const item = getActivation(userId, id);
+  if (item.status !== "ACTIVE") throw new Error("Invalid activation state");
   item.status = "COMPLETED";
   item.message = {
     sender: "SUBBY-DEMO",
     body: "Your simulated verification code is 482913.",
     receivedAt: now(),
   };
+  return item;
+}
+export function cancelSms(userId: number, id: string) {
+  const item = getActivation(userId, id);
+  if (item.status !== "ACTIVE")
+    throw new Error("Activation cannot be cancelled");
+  item.status = "CANCELLED";
   return item;
 }
 export function listActivations(userId: number) {
@@ -177,12 +185,18 @@ export function getInbox(userId: number, id: string) {
 }
 export function simulateEmail(userId: number, id: string) {
   const inbox = getInbox(userId, id);
+  if (inbox.status !== "ACTIVE") throw new Error("Inbox is expired");
   inbox.messages.unshift({
     sender: "hello@subby.demo",
     subject: "Demo inbox message",
     body: "This simulated email confirms your Phase 1 inbox is working.",
     receivedAt: now(),
   });
+  return inbox;
+}
+export function expireInbox(userId: number, id: string) {
+  const inbox = getInbox(userId, id);
+  inbox.status = "EXPIRED";
   return inbox;
 }
 export function listInboxes(userId: number) {
