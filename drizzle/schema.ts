@@ -2,6 +2,7 @@ import {
   bigint,
   index,
   integer,
+  uniqueIndex,
   jsonb,
   pgTable,
   serial,
@@ -31,7 +32,7 @@ export const wallets = pgTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => ({
-    userCurrency: index("wallet_user_currency_idx").on(
+    userCurrency: uniqueIndex("wallet_user_currency_unique").on(
       table.userId,
       table.currency
     ),
@@ -82,10 +83,13 @@ export const smsActivations = pgTable("smsActivations", {
   currency: varchar("currency", { length: 3 }).notNull().default("NGN"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  expiresAt: timestamp("expiresAt"),
+  completedAt: timestamp("completedAt"),
 });
 export const smsMessages = pgTable("smsMessages", {
   id: serial("id").primaryKey(),
   activationId: integer("activationId").notNull(),
+  sender: varchar("sender", { length: 320 }).notNull().default("demo.sender"),
   body: text("body").notNull(),
   receivedAt: timestamp("receivedAt").defaultNow().notNull(),
 });

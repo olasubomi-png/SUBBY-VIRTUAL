@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
 
 const nav = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -169,6 +170,9 @@ function StatusPill({ status }: { status: string }) {
 }
 
 function Overview({ setActive }: { setActive: (id: string) => void }) {
+  const summary = trpc.workspace.summary.useQuery();
+  const requests = trpc.workspace.smsRequests.useQuery();
+  const balance = summary.data?.balance.NGN ?? 0;
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
@@ -193,22 +197,22 @@ function Overview({ setActive }: { setActive: (id: string) => void }) {
         <Metric
           icon={WalletCards}
           label="Available balance"
-          value="₦24,680.00"
-          detail="+₦8,000 this month"
+          value={`₦${(balance / 100).toFixed(2)}`}
+          detail="Server-authoritative Demo Credits"
           accent="cyan"
         />
         <Metric
           icon={MessageSquareText}
           label="Active requests"
-          value="02"
-          detail="1 SMS · 1 inbox"
+          value={String(summary.data?.activeRequests ?? 0).padStart(2, "0")}
+          detail="Live demo requests"
           accent="violet"
         />
         <Metric
           icon={ShieldCheck}
           label="Success rate"
-          value="98.4%"
-          detail="Across 126 requests"
+          value={`${summary.data?.successRate ?? 0}%`}
+          detail="Demo provider status"
           accent="emerald"
         />
       </div>
@@ -231,9 +235,9 @@ function Overview({ setActive }: { setActive: (id: string) => void }) {
             </button>
           </CardHeader>
           <CardContent className="space-y-1">
-            {smsRequests.map((r, i) => (
+            {(requests.data ?? []).map((r, i) => (
               <div
-                key={r.number}
+                key={r.id}
                 className="flex items-center gap-4 rounded-xl px-2 py-3.5 transition hover:bg-white/[0.03]"
               >
                 <div
@@ -249,14 +253,15 @@ function Overview({ setActive }: { setActive: (id: string) => void }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <p className="truncate text-sm font-medium text-slate-200">
-                      {r.service}
+                      {r.serviceId}
                     </p>
                     <span className="text-[10px] text-slate-600">
                       {r.country}
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-slate-500">
-                    {r.number} · {r.time}
+                    {r.phoneNumber} ·{" "}
+                    {new Date(r.createdAt).toLocaleTimeString()}
                   </p>
                 </div>
                 <StatusPill status={r.status} />
@@ -396,6 +401,215 @@ function QuickAction({
 }
 
 function RequestPage({ type }: { type: "sms" | "mail" }) {
+  const [label, setLabel] = useState("verification");
+  const [serviceId, setServiceId] = useState("verify");
+  const [country, setCountry] = useState("NG");
+  const [selectedId, setSelectedId] = useState<string>();
+  const smsOptions = trpc.workspace.smsOptions.useQuery(undefined, {
+    enabled: type === "sms",
+  });
+  const smsRequests = trpc.workspace.smsRequests.useQuery();
+  const mailInboxes = trpc.workspace.mailInboxes.useQuery();
+  const createSms = trpc.workspace.createSmsRequest.useMutation({
+    onSuccess: () => smsRequests.refetch(),
+  });
+  const createMail = trpc.workspace.createMailInbox.useMutation({
+    onSuccess: () => mailInboxes.refetch(),
+  });
+  const simulateSms = trpc.workspace.simulateSms.useMutation({
+    onSuccess: () => smsRequests.refetch(),
+  });
+  const simulateEmail = trpc.workspace.simulateEmail.useMutation({
+    onSuccess: () => mailInboxes.refetch(),
+  });
+  const items =
+    type === "sms" ? (smsRequests.data ?? []) : (mailInboxes.data ?? []);
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      <div>
+        <p className="mb-2 text-sm text-slate-500">
+          Workspace / {type === "sms" ? "SMS requests" : "Mail inboxes"}
+        </p>
+        <h1 className="text-3xl font-semibold text-white">
+          {type === "sms" ? "SMS requests" : "Mail inboxes"}
+        </h1>
+        <p className="mt-2 text-sm text-slate-400">
+          Demo/Test only. No external provider is contacted.
+        </p>
+      </div>
+      <div className="grid gap-5 lg:grid-cols-[360px_1fr]">
+        <Card className="border-cyan-300/15 bg-[#10131c] shadow-none">
+          <CardHeader>
+            <CardTitle className="text-base text-white">
+              {type === "sms" ? "Get a demo number" : "Create a demo inbox"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {type === "sms" ? (
+              <>
+                <label className="block text-xs text-slate-400">
+                  Country
+                  <select
+                    value={country}
+                    onChange={e => setCountry(e.target.value)}
+                    className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0a0c12] px-3 text-sm text-slate-200"
+                  >
+                    <option value="NG">Nigeria (NG)</option>
+                    <option value="GB">United Kingdom (GB)</option>
+                    <option value="US">United States (US)</option>
+                  </select>
+                </label>
+                <label className="block text-xs text-slate-400">
+                  Service
+                  <select
+                    value={serviceId}
+                    onChange={e => setServiceId(e.target.value)}
+                    className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0a0c12] px-3 text-sm text-slate-200"
+                  >
+                    {smsOptions.data?.services.map(service => (
+                      <option key={service.id} value={service.id}>
+                        {service.name} · ₦
+                        {smsOptions.data.pricing.find(
+                          p => p.serviceId === service.id
+                        )?.amount ?? 0}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <Button
+                  disabled={createSms.isPending}
+                  onClick={() => createSms.mutate({ country, serviceId })}
+                  className="h-11 w-full rounded-lg bg-cyan-300 font-semibold text-slate-950 hover:bg-cyan-200"
+                >
+                  {createSms.isPending ? "Creating…" : "Get demo number"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <label className="block text-xs text-slate-400">
+                  Inbox label
+                  <input
+                    value={label}
+                    onChange={e => setLabel(e.target.value)}
+                    className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0a0c12] px-3 text-sm text-slate-200"
+                  />
+                </label>
+                <Button
+                  disabled={createMail.isPending}
+                  onClick={() => createMail.mutate({ label })}
+                  className="h-11 w-full rounded-lg bg-cyan-300 font-semibold text-slate-950 hover:bg-cyan-200"
+                >
+                  {createMail.isPending ? "Creating…" : "Create demo inbox"}
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+          <CardHeader>
+            <CardTitle className="text-base text-white">
+              {type === "sms" ? "Your activations" : "Your demo inboxes"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {items.length === 0 ? (
+              <p className="text-sm text-slate-500">No demo records yet.</p>
+            ) : (
+              items.map((item: any) => (
+                <div
+                  key={item.id}
+                  className="rounded-xl border border-white/[0.06] p-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-10 w-10 place-items-center rounded-xl bg-cyan-300/10 text-cyan-300">
+                      {type === "sms" ? (
+                        <MessageSquareText className="h-4 w-4" />
+                      ) : (
+                        <Inbox className="h-4 w-4" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-slate-200">
+                        {type === "sms" ? item.phoneNumber : item.address}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {type === "sms"
+                          ? `${item.serviceId} · ${item.country}`
+                          : `${item.messages?.length ?? 0} messages`}{" "}
+                        · Demo/Test
+                      </p>
+                    </div>
+                    <StatusPill
+                      status={
+                        item.status === "COMPLETED" ? "Completed" : "Active"
+                      }
+                    />
+                  </div>
+                  {type === "sms" && (
+                    <Button
+                      variant="outline"
+                      className="mt-3 border-white/10 bg-transparent text-xs text-slate-300"
+                      onClick={() => simulateSms.mutate({ id: item.id })}
+                    >
+                      Simulate SMS
+                    </Button>
+                  )}
+                  {type === "mail" && (
+                    <Button
+                      variant="outline"
+                      className="mt-3 border-white/10 bg-transparent text-xs text-slate-300"
+                      onClick={() => simulateEmail.mutate({ id: item.id })}
+                    >
+                      Simulate email
+                    </Button>
+                  )}
+                  {item.message && (
+                    <p className="mt-3 rounded-lg bg-emerald-400/10 p-3 text-xs text-emerald-200">
+                      {item.message.body}
+                    </p>
+                  )}
+                  {item.messages?.map((message: any) => (
+                    <p
+                      key={message.receivedAt}
+                      className="mt-3 rounded-lg bg-emerald-400/10 p-3 text-xs text-emerald-200"
+                    >
+                      {message.subject}: {message.body}
+                    </p>
+                  ))}
+                  {type === "mail" && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <Button
+                        variant="outline"
+                        className="border-white/10 bg-transparent text-xs text-slate-300"
+                        onClick={() =>
+                          navigator.clipboard.writeText(item.address)
+                        }
+                      >
+                        Copy address
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="border-white/10 bg-transparent text-xs text-slate-300"
+                        onClick={() => mailInboxes.refetch()}
+                      >
+                        Refresh
+                      </Button>
+                      <span className="text-[11px] text-slate-500">
+                        Expires {new Date(item.expiresAt).toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function LegacyRequestPage({ type }: { type: "sms" | "mail" }) {
   const [created, setCreated] = useState(false);
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -484,7 +698,7 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
                 ]
             ).map((r: any) => (
               <div
-                key={r.number}
+                key={r.id}
                 className="flex items-center gap-3 rounded-xl border border-white/[0.06] p-4"
               >
                 <div className="grid h-10 w-10 place-items-center rounded-xl bg-cyan-300/10 text-cyan-300">
@@ -496,10 +710,11 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-medium text-slate-200">
-                    {r.service}
+                    {r.serviceId}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    {r.number} · {r.time}
+                    {r.phoneNumber} ·{" "}
+                    {new Date(r.createdAt).toLocaleTimeString()}
                   </p>
                 </div>
                 <StatusPill
@@ -515,6 +730,68 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
 }
 
 function Transactions() {
+  const wallet = trpc.workspace.wallet.useQuery();
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      <div>
+        <p className="mb-2 text-sm text-slate-500">Workspace / Transactions</p>
+        <h1 className="text-3xl font-semibold text-white">Transactions</h1>
+        <p className="mt-2 text-sm text-slate-400">
+          A traceable view of wallet activity and request charges.
+        </p>
+      </div>
+      <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+        <CardHeader>
+          <CardTitle className="text-base text-white">
+            Transaction history
+          </CardTitle>
+          <p className="mt-1 text-xs text-slate-500">
+            Every entry carries a unique reference for support review.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="divide-y divide-white/[0.06]">
+            {wallet.data?.ledger.length ? (
+              wallet.data.ledger.map(entry => (
+                <div
+                  key={entry.id}
+                  className="flex flex-wrap items-center gap-3 py-4"
+                >
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-slate-200">
+                      {entry.description}
+                    </p>
+                    <p className="mt-1 font-mono text-[11px] text-slate-600">
+                      {entry.referenceId}
+                    </p>
+                  </div>
+                  <StatusPill status="Completed" />
+                  <p
+                    className={cn(
+                      "w-full text-right text-sm font-semibold sm:w-auto",
+                      entry.type === "CREDIT"
+                        ? "text-emerald-300"
+                        : "text-slate-300"
+                    )}
+                  >
+                    {entry.type === "CREDIT" ? "+" : "−"}₦
+                    {(entry.amountMinor / 100).toFixed(2)}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="py-4 text-sm text-slate-500">
+                No transactions yet.
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function LegacyTransactions() {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div>
@@ -561,6 +838,7 @@ function Transactions() {
 }
 
 function Admin() {
+  const overview = trpc.admin.overview.useQuery();
   const sections = [
     [
       "Users",
@@ -611,29 +889,29 @@ function Admin() {
         <Metric
           icon={LayoutDashboard}
           label="Total users"
-          value="1,482"
-          detail="+4.8% this month"
+          value={String(overview.data?.users ?? 0)}
+          detail="Protected user count"
           accent="cyan"
         />
         <Metric
           icon={MessageSquareText}
           label="Requests today"
-          value="326"
-          detail="214 SMS · 112 mail"
+          value={String(overview.data?.requestsToday ?? 0)}
+          detail="Database-backed request count"
           accent="cyan"
         />
         <Metric
           icon={CircleDollarSign}
           label="Wallet volume"
-          value="₦1.28m"
-          detail="Across all ledgers"
+          value={`₦${((overview.data?.walletVolume ?? 0) / 100).toFixed(2)}`}
+          detail="Auditable wallet volume"
           accent="cyan"
         />
         <Metric
           icon={ShieldCheck}
           label="Providers"
-          value="02"
-          detail="Mock · operational"
+          value={String(overview.data?.activeProviders ?? 0).padStart(2, "0")}
+          detail="Evaluated provider registry"
           accent="emerald"
         />
       </div>
@@ -662,6 +940,95 @@ function Admin() {
 }
 
 function Wallet() {
+  const wallet = trpc.workspace.wallet.useQuery();
+  const addCredits = trpc.workspace.addDemoCredits.useMutation({
+    onSuccess: () => wallet.refetch(),
+  });
+  const amountMinor = 8000;
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      <div>
+        <p className="mb-2 text-sm text-slate-500">Workspace / Wallet</p>
+        <h1 className="text-3xl font-semibold text-white">Wallet</h1>
+        <p className="mt-2 text-sm text-slate-400">
+          Server-authoritative Demo Credits with an auditable ledger.
+        </p>
+      </div>
+      <Card className="border-cyan-300/20 bg-gradient-to-br from-cyan-400/10 to-[#10131c] shadow-none">
+        <CardContent className="p-6">
+          <p className="text-xs text-cyan-200/70">NGN available demo balance</p>
+          <p className="mt-2 text-4xl font-semibold tracking-tight text-white">
+            ₦{((wallet.data?.balanceMinor ?? 0) / 100).toFixed(2)}
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3 text-xs text-slate-400">
+            <span>
+              Credits added: ₦
+              {((wallet.data?.creditsMinor ?? 0) / 100).toFixed(2)}
+            </span>
+            <span>
+              Spent: ₦{((wallet.data?.spentMinor ?? 0) / 100).toFixed(2)}
+            </span>
+          </div>
+          <Button
+            disabled={addCredits.isPending}
+            onClick={() =>
+              addCredits.mutate({ amountMinor, requestId: crypto.randomUUID() })
+            }
+            className="mt-6 rounded-lg bg-cyan-300 text-xs font-semibold text-slate-950 hover:bg-cyan-200"
+          >
+            <Plus className="mr-2 h-3.5 w-3.5" /> Add ₦80.00 demo credits
+          </Button>
+        </CardContent>
+      </Card>
+      <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+        <CardHeader>
+          <CardTitle className="text-base text-white">
+            Ledger activity
+          </CardTitle>
+          <p className="mt-1 text-xs text-slate-500">
+            Every demo credit and request debit is server-recorded.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="divide-y divide-white/[0.06]">
+            {wallet.data?.ledger.length ? (
+              wallet.data.ledger.map(item => (
+                <div key={item.id} className="flex items-center gap-4 py-4">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-slate-200">
+                      {item.description}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {item.referenceId} ·{" "}
+                      {new Date(item.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <p
+                    className={cn(
+                      "text-sm font-semibold",
+                      item.type === "CREDIT"
+                        ? "text-emerald-300"
+                        : "text-slate-300"
+                    )}
+                  >
+                    {item.type === "CREDIT" ? "+" : "−"}₦
+                    {(item.amountMinor / 100).toFixed(2)}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="py-4 text-sm text-slate-500">
+                No transactions yet. Add demo credits to begin.
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function LegacyWallet() {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div>
