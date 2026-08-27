@@ -1,6 +1,6 @@
 # SUBBY VIRTUAL Phase 1 VPS Deployment
 
-This guide prepares the existing **mock-only Phase 1** application for a single Ubuntu Linux VPS at `subby.kdns.fr`. It does not deploy the application, apply migrations, create DNS records, provision a certificate, or enable live SMS, email, payments, or real-money funding.
+This guide prepares the existing **mock-only Phase 1** application for a single Ubuntu Linux VPS at `subomivirtual.kdns.fr`. It does not deploy the application, apply migrations, create DNS records, provision a certificate, or enable live SMS, email, payments, or real-money funding.
 
 > **Production process.** The repository has one production entry point: `pnpm start`, which executes `node dist/index.js` with `NODE_ENV=production`. PM2 runs that same compiled entry point once; it does not create a worker fleet or a second application process.
 
@@ -8,17 +8,17 @@ This guide prepares the existing **mock-only Phase 1** application for a single 
 
 | Layer                   | Phase 1 responsibility                                                                          | Network exposure                         |
 | ----------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| Nginx                   | Public HTTPS termination and reverse proxy for `subby.kdns.fr`                                  | Public ports `80` and `443` only         |
+| Nginx                   | Public HTTPS termination and reverse proxy for `subomivirtual.kdns.fr`                          | Public ports `80` and `443` only         |
 | Node.js / SUBBY VIRTUAL | React static assets, Express, tRPC, OAuth callback, `/health`, and cron-only dispatch endpoints | `127.0.0.1:3003` for this VPS deployment |
 | PostgreSQL              | Durable production source of truth                                                              | Localhost or private network only        |
 | Redis                   | Recommended distributed rate-limit storage                                                      | Localhost or private network only        |
 | PM2                     | One production process, restart management, and logs                                            | No public port                           |
 
-The committed Nginx bootstrap configuration is [`deploy/nginx/subby.kdns.fr.conf`](../deploy/nginx/subby.kdns.fr.conf). It proxies to the loopback-bound application and forwards `Host`, real IP, and forwarded protocol headers as required by the proxy configuration.[1]
+The committed Nginx bootstrap configuration is [`deploy/nginx/subomivirtual.kdns.fr.conf`](../deploy/nginx/subomivirtual.kdns.fr.conf). It proxies to the loopback-bound application and forwards `Host`, real IP, and forwarded protocol headers as required by the proxy configuration.[1]
 
 ## 1. VPS prerequisites
 
-Use an Ubuntu LTS VPS with a non-root operator account that has `sudo`. Before proceeding, point the DNS `A`/`AAAA` record for `subby.kdns.fr` to the VPS public address and confirm that SSH access still works.
+Use an Ubuntu LTS VPS with a non-root operator account that has `sudo`. Before proceeding, point the DNS `A`/`AAAA` record for `subomivirtual.kdns.fr` to the VPS public address and confirm that SSH access still works.
 
 Install baseline packages. Install **Node.js 22 or newer** through your organization-approved Node distribution, then confirm its version before using Corepack and pnpm.
 
@@ -80,7 +80,7 @@ Edit `.env` on the VPS. The following table distinguishes required production va
 | `VITE_APP_ID`, `OAUTH_SERVER_URL`, `VITE_OAUTH_PORTAL_URL`, `OWNER_OPEN_ID` | Required by existing auth integration                 | Preserve the values supplied by the project/OAuth configuration.                                                |
 | `BUILT_IN_FORGE_API_URL`, `BUILT_IN_FORGE_API_KEY`                          | Only when the existing integration needs them         | Server-only values; do not prefix the server key with `VITE_`.                                                  |
 | `VITE_FRONTEND_FORGE_API_URL`, `VITE_FRONTEND_FORGE_API_KEY`                | Only when the existing browser integration needs them | Values prefixed `VITE_` are build-time browser-visible; do not place database URLs or private credentials here. |
-| `APP_URL`                                                                   | Operational reference                                 | Set to `https://subby.kdns.fr`; the current Phase 1 runtime does not read it directly.                          |
+| `APP_URL`                                                                   | Operational reference                                 | Set to `https://subomivirtual.kdns.fr`; the current Phase 1 runtime does not read it directly.                  |
 | `SMS_PROVIDER_API_KEY`, `MAIL_PROVIDER_API_KEY`                             | Leave unset                                           | Phase 1 is intentionally mock-only.                                                                             |
 
 The root `.gitignore` already ignores `.env` and common environment-file variants. Do not commit runtime credentials.
@@ -129,8 +129,8 @@ Run the final command printed by `pm2 startup` with `sudo`, then repeat `pm2 sav
 Install the bootstrap HTTP site before asking Certbot to install certificates. The configuration intentionally contains no certificate paths before Certbot runs.
 
 ```sh
-sudo cp /var/www/subby-virtual/deploy/nginx/subby.kdns.fr.conf /etc/nginx/sites-available/subby.kdns.fr
-sudo ln -s /etc/nginx/sites-available/subby.kdns.fr /etc/nginx/sites-enabled/subby.kdns.fr
+sudo cp /var/www/subby-virtual/deploy/nginx/subomivirtual.kdns.fr.conf /etc/nginx/sites-available/subomivirtual.kdns.fr
+sudo ln -s /etc/nginx/sites-available/subomivirtual.kdns.fr /etc/nginx/sites-enabled/subomivirtual.kdns.fr
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
 sudo systemctl reload nginx
@@ -143,7 +143,7 @@ Once DNS resolves to the VPS and port `80` is publicly reachable, install Certbo
 ```sh
 sudo snap install --classic certbot
 sudo ln -sf /snap/bin/certbot /usr/local/bin/certbot
-sudo certbot --nginx -d subby.kdns.fr
+sudo certbot --nginx -d subomivirtual.kdns.fr
 sudo certbot renew --dry-run
 ```
 
@@ -168,25 +168,25 @@ The public `GET /health` endpoint returns a safe liveness payload with `provider
 
 ```sh
 curl --fail --silent --show-error http://127.0.0.1:3003/health
-curl --fail --silent --show-error https://subby.kdns.fr/health
+curl --fail --silent --show-error https://subomivirtual.kdns.fr/health
 ```
 
 The job dispatcher is request-driven. PM2 starts the route and safe startup guard, but it deliberately does **not** introduce an in-process timer. Stale recovery runs before authenticated `POST /api/scheduled/dispatch-jobs` dispatches queued work. Therefore, configure the existing cron-only caller supported by the application’s Manus identity after the VPS endpoint is reachable; do not replace it with an unauthenticated server cron or browser tab. Record and monitor the scheduler identity and failures separately from PM2. This authentication-dependent scheduler connection is a manual production prerequisite, not a completed result of repository preparation.
 
 ## 9. Production smoke-test checklist
 
-| Check                          | Expected result                                                                                                          |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| `https://subby.kdns.fr/`       | Application is reachable over HTTPS.                                                                                     |
-| `http://subby.kdns.fr/`        | Redirects to HTTPS after Certbot configuration.                                                                          |
-| Sign-in and sign-out           | Session cookies work through Nginx and HTTPS.                                                                            |
-| `/health`                      | Safe JSON reports `status: ok`, PostgreSQL mode/reachability, and ready dispatcher.                                      |
-| `pnpm db:migrate`              | Completes on real PostgreSQL, with migrations through `0007`.                                                            |
-| Mock SMS and demo email        | Create and queue through the existing authenticated UI/job path only.                                                    |
-| Wallet and admin               | Wallet operations remain mock/demo-safe; admin RBAC rejects non-admins.                                                  |
-| PM2 restart                    | `pm2 restart SUBBY-VIRTUAL --update-env` returns the app to healthy state.                                               |
-| PostgreSQL restart persistence | Create controlled mock records, restart PM2, then verify the same owner sees durable data and a different user does not. |
-| Dispatcher                     | An authenticated scheduled call completes/retries/recoveries without a browser remaining open.                           |
+| Check                            | Expected result                                                                                                          |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `https://subomivirtual.kdns.fr/` | Application is reachable over HTTPS.                                                                                     |
+| `http://subomivirtual.kdns.fr/`  | Redirects to HTTPS after Certbot configuration.                                                                          |
+| Sign-in and sign-out             | Session cookies work through Nginx and HTTPS.                                                                            |
+| `/health`                        | Safe JSON reports `status: ok`, PostgreSQL mode/reachability, and ready dispatcher.                                      |
+| `pnpm db:migrate`                | Completes on real PostgreSQL, with migrations through `0007`.                                                            |
+| Mock SMS and demo email          | Create and queue through the existing authenticated UI/job path only.                                                    |
+| Wallet and admin                 | Wallet operations remain mock/demo-safe; admin RBAC rejects non-admins.                                                  |
+| PM2 restart                      | `pm2 restart SUBBY-VIRTUAL --update-env` returns the app to healthy state.                                               |
+| PostgreSQL restart persistence   | Create controlled mock records, restart PM2, then verify the same owner sees durable data and a different user does not. |
+| Dispatcher                       | An authenticated scheduled call completes/retries/recoveries without a browser remaining open.                           |
 
 ## 10. Updates and rollback
 
@@ -202,7 +202,7 @@ pnpm install --frozen-lockfile
 pnpm db:migrate
 pnpm build
 pm2 reload SUBBY-VIRTUAL --update-env
-curl --fail --silent --show-error https://subby.kdns.fr/health
+curl --fail --silent --show-error https://subomivirtual.kdns.fr/health
 ```
 
 If the application release must be rolled back, return the code to the previously recorded Git SHA, reinstall dependencies, rebuild, and reload PM2. Do **not** roll back PostgreSQL schema or data casually: database rollback requires a separately rehearsed, backup-based restoration procedure compatible with every applied migration.

@@ -14,6 +14,8 @@ describe("VPS deployment artifacts", () => {
     const template = readProjectFile("deploy/env.example");
     expect(gitignore).toContain(".env.*");
     expect(template).toContain("HOST=127.0.0.1");
+    expect(template).toContain("PORT=3003");
+    expect(template).toContain("APP_URL=https://subomivirtual.kdns.fr");
     expect(template).toContain("DATABASE_URL=postgresql://");
     expect(template).toContain("JWT_SECRET=REPLACE_WITH_A_LONG_RANDOM_SECRET");
     expect(template).toContain("REPLACE_WITH_STRONG_PASSWORD");
@@ -30,12 +32,16 @@ describe("VPS deployment artifacts", () => {
     expect(pm2).not.toMatch(/JWT_SECRET|DATABASE_URL|REDIS_URL/);
   });
 
-  it("proxies the domain only to the local application port with required forwarded headers", () => {
-    const nginx = readProjectFile("deploy/nginx/subby.kdns.fr.conf");
-    expect(nginx).toContain("server_name subby.kdns.fr;");
+  it("uses the dedicated production domain and proxies it only to the local application port", () => {
+    const nginx = readProjectFile("deploy/nginx/subomivirtual.kdns.fr.conf");
+    const vpsGuide = readProjectFile("docs/VPS_DEPLOYMENT.md");
+    expect(nginx).toContain("server_name subomivirtual.kdns.fr;");
     expect(nginx).toContain("proxy_pass http://127.0.0.1:3003;");
     expect(nginx).toContain("proxy_set_header Host $host;");
     expect(nginx).toContain("proxy_set_header X-Forwarded-Proto $scheme;");
     expect(nginx).not.toContain("ssl_certificate");
+    expect(vpsGuide).toContain("https://subomivirtual.kdns.fr");
+    const deprecatedDomain = ["subby", "kdns", "fr"].join(".");
+    expect(vpsGuide).not.toContain(deprecatedDomain);
   });
 });

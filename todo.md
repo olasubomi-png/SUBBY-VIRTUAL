@@ -281,4 +281,11 @@
 - [x] Change the SUBBY VIRTUAL deployment binding and reverse-proxy port from 3001 to dedicated port 3003 in the specified deployment artifacts and tests
 - [x] Remove the accidental untracked `t --activate` file without touching any running service or VPS configuration
 - [x] Verify no relevant SUBBY VIRTUAL deployment artifact retains port 3001 or 3000 where port 3003 is required; run diff checks and targeted/full tests
-- [ ] Commit and push the verified port correction to GitHub main with the requested clear message
+- [x] Commit and push the verified port correction to GitHub main with the requested clear message
+
+# Production domain correction
+
+- [x] Replace subby.kdns.fr with subomivirtual.kdns.fr in all SUBBY VIRTUAL deployment and VPS artifacts, retaining loopback port 3003
+- [x] Rename the Nginx deployment artifact and update every test and documentation reference consistently
+- [x] Verify no old deployment-domain reference remains, validate port 3003 preservation, run diff checks and relevant tests
+- [ ] Commit and push the verified domain correction to GitHub main without touching live VPS services
