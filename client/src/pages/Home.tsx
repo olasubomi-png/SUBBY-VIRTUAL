@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 import {
   ArrowUpRight,
   BarChart3,
-  Check,
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
@@ -42,42 +41,20 @@ const nav = [
   { id: "admin", label: "Admin console", icon: ShieldCheck },
 ];
 
-const smsRequests = [
-  {
-    service: "Account verification",
-    number: "+234 809 440 2186",
-    country: "NG",
-    status: "Waiting",
-    time: "Just now",
-  },
-  {
-    service: "Sandbox testing",
-    number: "+44 7400 123 866",
-    country: "GB",
-    status: "Code received",
-    time: "12 min ago",
-  },
-  {
-    service: "Product alerts",
-    number: "+1 202 555 0147",
-    country: "US",
-    status: "Completed",
-    time: "Yesterday",
-  },
-];
-
 function Sidebar({
   active,
   setActive,
   isAdmin,
   mobileOpen,
   setMobileOpen,
+  onSignOut,
 }: {
   active: string;
   setActive: (id: string) => void;
   isAdmin: boolean;
   mobileOpen: boolean;
   setMobileOpen: (open: boolean) => void;
+  onSignOut: () => void;
 }) {
   return (
     <>
@@ -146,7 +123,10 @@ function Sidebar({
             Requests are simulated safely. No real messages or money are sent.
           </p>
         </div>
-        <button className="mt-5 flex items-center gap-3 px-3 py-2 text-sm text-slate-500 transition hover:text-white">
+        <button
+          onClick={onSignOut}
+          className="mt-5 flex items-center gap-3 px-3 py-2 text-sm text-slate-500 transition hover:text-white"
+        >
           <LogOut className="h-4 w-4" /> Sign out
         </button>
       </aside>
@@ -740,126 +720,6 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
                 </div>
               ))
             )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-function LegacyRequestPage({ type }: { type: "sms" | "mail" }) {
-  const [created, setCreated] = useState(false);
-  return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      <div>
-        <p className="mb-2 text-sm text-slate-500">
-          Workspace / {type === "sms" ? "SMS requests" : "Mail inboxes"}
-        </p>
-        <h1 className="text-3xl font-semibold text-white">
-          {type === "sms" ? "SMS requests" : "Mail inboxes"}
-        </h1>
-        <p className="mt-2 text-sm text-slate-400">
-          {type === "sms"
-            ? "Create a mock activation and watch its status update safely."
-            : "Create a temporary demo inbox for receiving simulated messages."}
-        </p>
-      </div>
-      <div className="grid gap-5 lg:grid-cols-[360px_1fr]">
-        <Card className="border-cyan-300/15 bg-[#10131c] shadow-none">
-          <CardHeader>
-            <CardTitle className="text-base text-white">
-              {type === "sms" ? "New SMS request" : "New temporary inbox"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <label className="block text-xs font-medium text-slate-400">
-              {type === "sms" ? "Country" : "Inbox label"}
-              <select className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0a0c12] px-3 text-sm text-slate-200 outline-none focus:border-cyan-300/50">
-                <option>
-                  {type === "sms" ? "Nigeria (NG)" : "verification"}
-                </option>
-                <option>
-                  {type === "sms" ? "United Kingdom (GB)" : "receipts"}
-                </option>
-                <option>
-                  {type === "sms" ? "United States (US)" : "support"}
-                </option>
-              </select>
-            </label>
-            <label className="block text-xs font-medium text-slate-400">
-              {type === "sms" ? "Service" : "Expiry"}
-              <select className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0a0c12] px-3 text-sm text-slate-200 outline-none focus:border-cyan-300/50">
-                <option>
-                  {type === "sms" ? "Account verification · ₦150" : "24 hours"}
-                </option>
-                <option>
-                  {type === "sms" ? "Sandbox testing · ₦80" : "7 days"}
-                </option>
-              </select>
-            </label>
-            <Button
-              onClick={() => setCreated(true)}
-              className="h-11 w-full rounded-lg bg-cyan-300 font-semibold text-slate-950 hover:bg-cyan-200"
-            >
-              {created ? (
-                <>
-                  <Check className="mr-2 h-4 w-4" /> Request created
-                </>
-              ) : (
-                <>
-                  <Plus className="mr-2 h-4 w-4" /> Create mock request
-                </>
-              )}
-            </Button>
-            <p className="text-center text-[11px] leading-5 text-slate-500">
-              Demo only. This action does not contact any external provider.
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
-          <CardHeader>
-            <CardTitle className="text-base text-white">
-              {type === "sms" ? "Active SMS requests" : "Your demo inboxes"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {(type === "sms"
-              ? smsRequests
-              : [
-                  {
-                    service: "verification@subby.demo",
-                    number: "1 message",
-                    country: "24h left",
-                    status: "Active",
-                    time: "Created today",
-                  },
-                ]
-            ).map((r: any) => (
-              <div
-                key={r.id}
-                className="flex items-center gap-3 rounded-xl border border-white/[0.06] p-4"
-              >
-                <div className="grid h-10 w-10 place-items-center rounded-xl bg-cyan-300/10 text-cyan-300">
-                  {type === "sms" ? (
-                    <MessageSquareText className="h-4 w-4" />
-                  ) : (
-                    <Inbox className="h-4 w-4" />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-slate-200">
-                    {r.serviceId}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {r.phoneNumber} ·{" "}
-                    {new Date(r.createdAt).toLocaleTimeString()}
-                  </p>
-                </div>
-                <StatusPill
-                  status={r.status === "Active" ? "Waiting" : r.status}
-                />
-              </div>
-            ))}
           </CardContent>
         </Card>
       </div>
@@ -2110,7 +1970,7 @@ function LegacyWallet() {
 }
 
 export default function Home() {
-  const { user } = useAuth();
+  const { user, loading, logout } = useAuth();
   const [location] = useLocation();
   const initialSection =
     location === "/dashboard" || location === "/"
@@ -2120,6 +1980,43 @@ export default function Home() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const isAdmin = user?.role === "admin";
   const title = nav.find(n => n.id === active)?.label ?? "Overview";
+  if (loading) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-[#080a0f] p-6 text-slate-200">
+        <div className="text-center">
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-cyan-300/30 border-t-cyan-300" />
+          <p className="mt-4 text-sm text-slate-400">Checking your session…</p>
+        </div>
+      </div>
+    );
+  }
+  if (!user) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-[#080a0f] p-6 text-slate-200">
+        <Card className="w-full max-w-md border-white/[0.08] bg-[#10131c] shadow-2xl shadow-cyan-950/20">
+          <CardHeader>
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-cyan-300 to-blue-500 text-sm font-black text-[#07101e]">
+              S
+            </div>
+            <CardTitle className="pt-4 text-xl text-white">
+              Sign in to SUBBY VIRTUAL
+            </CardTitle>
+            <p className="text-sm leading-6 text-slate-400">
+              Your workspace, jobs, and mock delivery records are protected.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <Button
+              onClick={startLogin}
+              className="w-full bg-cyan-300 font-semibold text-slate-950 hover:bg-cyan-200"
+            >
+              Continue to sign in
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
   return (
     <div className="min-h-screen bg-[#080a0f] text-slate-200">
       <Sidebar
@@ -2128,6 +2025,7 @@ export default function Home() {
         isAdmin={isAdmin}
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
+        onSignOut={() => void logout()}
       />
       <div className="lg:pl-[260px]">
         <header className="sticky top-0 z-20 flex h-[76px] items-center justify-between border-b border-white/[0.06] bg-[#080a0f]/90 px-5 backdrop-blur-xl md:px-10">
@@ -2189,9 +2087,9 @@ export default function Home() {
                 Need help with a mock delivery request? Open a support ticket
                 for the operations team.
               </p>
-              <Button className="mt-6 rounded-lg bg-cyan-300 text-slate-950 hover:bg-cyan-200">
-                Open support ticket
-              </Button>
+              <p className="mt-6 inline-flex rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-slate-500">
+                Support ticket intake is not available in Phase 1.
+              </p>
             </div>
           )}
         </main>

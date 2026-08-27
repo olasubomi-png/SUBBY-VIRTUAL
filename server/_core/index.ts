@@ -64,7 +64,7 @@ async function startServer() {
       return res.json({ ok: true, result: await expireDemoResources() });
     } catch (error) {
       return res.status(500).json({
-        error: error instanceof Error ? error.message : "cleanup failed",
+        error: "cleanup failed",
       });
     }
   });
@@ -79,7 +79,7 @@ async function startServer() {
       return res.json({ ok: true, result: await dispatchScheduledJobs(limit) });
     } catch (error) {
       return res.status(500).json({
-        error: error instanceof Error ? error.message : "job dispatch failed",
+        error: "job dispatch failed",
       });
     }
   });

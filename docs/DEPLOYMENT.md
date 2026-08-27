@@ -1,6 +1,6 @@
 # Deployment
 
-Use Node.js 22 or newer, pnpm, and Docker Compose. On an Ubuntu VPS, clone the private repository, install dependencies with `pnpm install`, start private infrastructure with `docker compose up -d`, generate/apply PostgreSQL migrations with `DATABASE_URL=postgresql://... pnpm drizzle-kit migrate`, verify with `pnpm check && pnpm lint && pnpm test && pnpm build`, and run the compiled server with `pnpm start`. The health endpoint is `GET /health`; the Node process closes its database pool, Redis client, and HTTP server on SIGTERM/SIGINT.
+Use Node.js 22 or newer, pnpm, and Docker Compose. On an Ubuntu VPS, clone the public repository, install dependencies with `pnpm install`, start private infrastructure with `docker compose up -d`, generate/apply PostgreSQL migrations with `DATABASE_URL=postgresql://... pnpm drizzle-kit migrate`, verify with `pnpm check && pnpm lint && pnpm test && pnpm build`, and run the compiled server with `pnpm start`. The health endpoint is `GET /health`; the Node process closes its database pool, Redis client, and HTTP server on SIGTERM/SIGINT.
 
 Set `DATABASE_URL` to the PostgreSQL connection string and `REDIS_URL` to the private Redis connection string. PostgreSQL and Redis should remain on the internal Docker network or localhost; do not publish their ports to the public internet. Configure a TLS reverse proxy in front of the Node process.
 
@@ -65,3 +65,5 @@ SMS and email simulation requests are queue-authoritative: the tRPC mutation val
 Before claiming new work, `POST /api/scheduled/dispatch-jobs` recovers stale `PROCESSING` rows. Jobs with retry budget remaining return to `RETRYING` with bounded backoff; exhausted jobs become `FAILED` with a safe timeout code. Lock metadata is cleared, recovery counters are recorded, and the transition is written to `auditLogs`. The fallback mode applies the same policy in memory for local tests only.
 
 Startup exposes an explicit dispatcher readiness state through `/health`, and the server logs the scheduled dispatch path after startup. No in-process timer is used. Concurrent dispatch calls share an in-flight guard, and PostgreSQL claims continue to use `FOR UPDATE SKIP LOCKED`. Apply the additive `drizzle/0007_modern_eternals.sql` migration to the real PostgreSQL target before relying on durable recovery metadata; the configured TiDB/MySQL-compatible development endpoint is not a valid PostgreSQL migration target.
+
+Both cron-only callbacks return generic JSON failures on unexpected server errors rather than relaying raw exception messages. This preserves the platform retry signal without exposing database, provider, or runtime details to callback consumers.

@@ -247,3 +247,20 @@
 - [x] Add a queued-workflow transient failure-injection test proving RETRYING, bounded nextRunAt, and no duplicated domain side effects
 - [x] Add a queued-workflow permanent failure-injection test proving FAILED status, safe error metadata, and no false completion
 - [x] Add an explicit queue-authoritative router authorization and redaction regression test
+
+# Final Phase 1 release verification and closure
+
+- [x] Audit repository, configuration, GitHub main, documentation, migrations, tests, and outstanding placeholders against the closure brief
+- [x] Run lint, TypeScript checks, the full test suite, and the production build; repair only verified release blockers
+- [x] Verify schema and migration metadata consistency, PostgreSQL versus fallback/unsupported-dialect boundaries, and job dispatcher reliability
+- [x] Audit security, privacy, RBAC, ownership, secret exposure, and frontend release flows without expanding product scope
+- [x] Classify remaining work as Phase 2, infrastructure verification, or intentional mock-only limitations and update documentation honestly
+- [ ] Create a final Phase 1 checkpoint, synchronize GitHub main, and report verified closure evidence
+
+# Final release audit fix
+
+- [x] Fix the verified unauthenticated frontend state that remains on a loading spinner after protected workspace queries return 401
+- [x] Wire the visible workspace sign-out control to the authenticated logout flow
+- [x] Return safe generic failures from cron-only cleanup and dispatch endpoints instead of relaying raw exception messages
+- [x] Replace the visible but non-functional support-ticket action with an explicit Phase 1 availability notice
+- [x] Remove the unused hard-coded SMS fixture so no stale mock request data remains in the release source

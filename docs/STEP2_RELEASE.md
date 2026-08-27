@@ -134,3 +134,15 @@ This hardening pass changed `drizzle/schema.ts`; `drizzle/0007_modern_eternals.s
 ## Hardened release identity
 
 The Phase 1 hardened release is checkpointed as `83de23b97d18ec54ea2bfd7540f3ce9bc6cdb7f1`. Local `HEAD` and `origin/main` match this SHA, and the public repository is [olasubomi-png/SUBBY-VIRTUAL](https://github.com/olasubomi-png/SUBBY-VIRTUAL) on its `main` branch.
+
+## Final Phase 1 release verification and closure
+
+The closure audit inspected the active repository, package scripts, lockfile, server, client, shared contracts, Drizzle schema and migration journal, Docker Compose, deployment and environment guidance, tests, TODO history, and public GitHub `main`. It confirmed that the current production target remains PostgreSQL, while an absent database URL is an explicitly non-durable development fallback and an unsupported dialect is rejected. The managed development endpoint identifies as TiDB/MySQL and is therefore not treated as PostgreSQL evidence or a migration target.
+
+The audit verified the queue-authoritative SMS and demo-email flows, bounded supported job types, ownership checks, redacted job data, PostgreSQL atomic claims using `FOR UPDATE SKIP LOCKED`, duplicate-dispatch guarding, stale-processing recovery, bounded retries, cancellation guards, and safe audit activity. The source scan found no committed environment files, live-provider credentials, arbitrary execution primitives, or server-side timer worker. Administrator operations remain server-side RBAC protected.
+
+Three small release defects were corrected without expanding scope: the unauthenticated workspace now resolves to a protected sign-in experience rather than leaving a spinner after a `401`; the sign-out control now calls the shared logout operation; and unreachable hard-coded request UI was removed. The support-ticket control now honestly identifies ticket intake as unavailable in Phase 1. Cron-only cleanup and dispatch callbacks now return generic failure messages rather than relaying raw exception text.
+
+The final local validation on 2026-08-27 passed `pnpm lint`, `pnpm check`, `pnpm test`, and `pnpm build`. Vitest reported 14 passing files and 63 passing tests. The production build completed successfully, with a non-blocking client-chunk-size warning for a minified bundle over 500 kB. Drizzle metadata is ordered from `0000_regular_daredevil` through `0007_modern_eternals`; the latest additive migration adds only `jobs.recoveryCount` and `jobs.lastRecoveredAt`, matching the schema and snapshot.
+
+Phase 1 is code-complete at closure. Before a durable production launch, operators must apply migrations through `0007` to an actual PostgreSQL service, configure the deployed cron-only cleanup and dispatch callbacks, and perform the documented restart-persistence verification. Real SMS/email providers, payments, real-money funding, arbitrary execution, customer support ticket intake, and bundle-splitting optimization remain intentional follow-on work rather than part of this Phase 1 release.
