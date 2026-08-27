@@ -1,5 +1,7 @@
 # Deployment
 
+For a complete standard Linux VPS runbook using the existing `pnpm start` process, PostgreSQL, PM2, Nginx, Certbot, UFW, health checks, scheduler caveats, smoke tests, rollback, and updates, read [VPS Deployment](./VPS_DEPLOYMENT.md).
+
 Use Node.js 22 or newer, pnpm, and Docker Compose. On an Ubuntu VPS, clone the public repository, install dependencies with `pnpm install`, start private infrastructure with `docker compose up -d`, generate/apply PostgreSQL migrations with `DATABASE_URL=postgresql://... pnpm drizzle-kit migrate`, verify with `pnpm check && pnpm lint && pnpm test && pnpm build`, and run the compiled server with `pnpm start`. The health endpoint is `GET /health`; the Node process closes its database pool, Redis client, and HTTP server on SIGTERM/SIGINT.
 
 Set `DATABASE_URL` to the PostgreSQL connection string and `REDIS_URL` to the private Redis connection string. PostgreSQL and Redis should remain on the internal Docker network or localhost; do not publish their ports to the public internet. Configure a TLS reverse proxy in front of the Node process.

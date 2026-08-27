@@ -264,3 +264,14 @@
 - [x] Return safe generic failures from cron-only cleanup and dispatch endpoints instead of relaying raw exception messages
 - [x] Replace the visible but non-functional support-ticket action with an explicit Phase 1 availability notice
 - [x] Remove the unused hard-coded SMS fixture so no stale mock request data remains in the release source
+
+# Phase 1 VPS deployment readiness
+
+- [x] Audit existing production startup, environment, database, migrations, health, dispatcher, Docker, and deployment artifacts without creating a second entry point
+- [x] Add a credential-free .env.example and confirm environment files remain ignored
+- [x] Add a single-process PM2 ecosystem configuration using the existing production entry point and localhost-only binding
+- [x] Add an Nginx reverse-proxy configuration example for subby.kdns.fr with HTTP-to-HTTPS redirection and forwarded headers
+- [x] Verify and, only if required, harden proxy trust, host/port binding, health reporting, and graceful shutdown for VPS operation
+- [x] Add a complete VPS deployment guide covering PostgreSQL, migrations, PM2, Nginx, Certbot, UFW, scheduled dispatcher operation, smoke tests, rollback, and updates
+- [x] Run lint, TypeScript checks, the full test suite, and production build; verify deployment artifacts without deploying to the VPS
+- [ ] Save a checkpoint, synchronize the deployment-readiness commit to GitHub main, and report the exact SHA

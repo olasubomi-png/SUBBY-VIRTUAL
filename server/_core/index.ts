@@ -8,8 +8,10 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { closeDb } from "../db";
+import { getDatabaseHealth } from "../db";
 import { closeRedis } from "../redis";
 import { dispatchScheduledJobs, expireDemoResources } from "../jobs";
+import { getServerBinding } from "../runtimeConfig";
 import { sdk } from "./sdk";
 import { serveStatic, setupVite } from "./vite";
 
@@ -40,16 +42,18 @@ async function startServer() {
   startupClaimed = true;
   const app = express();
   const server = createServer(app);
+  if (process.env.NODE_ENV === "production") app.set("trust proxy", 1);
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
-  app.get("/health", (_req, res) =>
+  app.get("/health", async (_req, res) =>
     res.status(200).json({
       status: "ok",
       service: "subby-virtual",
       providerMode: "mock",
+      database: await getDatabaseHealth(),
       jobDispatcher: {
         ready: dispatcherReady,
         mode: "scheduled-http",
@@ -98,16 +102,18 @@ async function startServer() {
     serveStatic(app);
   }
 
-  const preferredPort = parseInt(process.env.PORT || "3000");
-  const port = await findAvailablePort(preferredPort);
+  const binding = getServerBinding();
+  const port = binding.allowPortFallback
+    ? await findAvailablePort(binding.port)
+    : binding.port;
 
-  if (port !== preferredPort) {
-    console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
+  if (port !== binding.port) {
+    console.log(`Port ${binding.port} is busy, using port ${port} instead`);
   }
 
   dispatcherReady = true;
-  server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}/`);
+  server.listen(port, binding.host, () => {
+    console.log(`Server running on http://${binding.host}:${port}/`);
     console.log(
       `[Jobs] Dispatcher ready via /api/scheduled/dispatch-jobs; in-process timers disabled`
     );
