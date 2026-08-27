@@ -274,4 +274,4 @@
 - [x] Verify and, only if required, harden proxy trust, host/port binding, health reporting, and graceful shutdown for VPS operation
 - [x] Add a complete VPS deployment guide covering PostgreSQL, migrations, PM2, Nginx, Certbot, UFW, scheduled dispatcher operation, smoke tests, rollback, and updates
 - [x] Run lint, TypeScript checks, the full test suite, and production build; verify deployment artifacts without deploying to the VPS
-- [ ] Save a checkpoint, synchronize the deployment-readiness commit to GitHub main, and report the exact SHA
+- [x] Save a checkpoint, synchronize the deployment-readiness commit to GitHub main, and report the exact SHA
