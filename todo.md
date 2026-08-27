@@ -295,4 +295,4 @@
 - [x] Add the required USING "metadata"::jsonb conversion to drizzle/0001_pink_legion.sql without changing its breakpoint, sequence, or unrelated SQL
 - [x] Add focused regression coverage for the audit-log jsonb conversion statement
 - [x] Run migration-focused validation and verify the isolated diff contains no port, domain, database-configuration, or unrelated migration changes
-- [ ] Save a checkpoint, commit the verified fix, push it to GitHub main, and report the commit SHA
+- [x] Save a checkpoint, commit the verified fix, push it to GitHub main, and report the commit SHA
