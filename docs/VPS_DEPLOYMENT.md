@@ -6,13 +6,13 @@ This guide prepares the existing **mock-only Phase 1** application for a single 
 
 ## Deployment model
 
-| Layer                   | Phase 1 responsibility                                                                          | Network exposure                  |
-| ----------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------- |
-| Nginx                   | Public HTTPS termination and reverse proxy for `subby.kdns.fr`                                  | Public ports `80` and `443` only  |
-| Node.js / SUBBY VIRTUAL | React static assets, Express, tRPC, OAuth callback, `/health`, and cron-only dispatch endpoints | `127.0.0.1:3000` by default       |
-| PostgreSQL              | Durable production source of truth                                                              | Localhost or private network only |
-| Redis                   | Recommended distributed rate-limit storage                                                      | Localhost or private network only |
-| PM2                     | One production process, restart management, and logs                                            | No public port                    |
+| Layer                   | Phase 1 responsibility                                                                          | Network exposure                         |
+| ----------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| Nginx                   | Public HTTPS termination and reverse proxy for `subby.kdns.fr`                                  | Public ports `80` and `443` only         |
+| Node.js / SUBBY VIRTUAL | React static assets, Express, tRPC, OAuth callback, `/health`, and cron-only dispatch endpoints | `127.0.0.1:3003` for this VPS deployment |
+| PostgreSQL              | Durable production source of truth                                                              | Localhost or private network only        |
+| Redis                   | Recommended distributed rate-limit storage                                                      | Localhost or private network only        |
+| PM2                     | One production process, restart management, and logs                                            | No public port                           |
 
 The committed Nginx bootstrap configuration is [`deploy/nginx/subby.kdns.fr.conf`](../deploy/nginx/subby.kdns.fr.conf). It proxies to the loopback-bound application and forwards `Host`, real IP, and forwarded protocol headers as required by the proxy configuration.[1]
 
@@ -73,7 +73,7 @@ Edit `.env` on the VPS. The following table distinguishes required production va
 | --------------------------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `NODE_ENV`                                                                  | Required                                              | Set to `production`.                                                                                            |
 | `HOST`                                                                      | Required for this VPS design                          | Set to `127.0.0.1`; Nginx owns public HTTPS.                                                                    |
-| `PORT`                                                                      | Required for this VPS design                          | Set to `3000`; do not open it publicly. Production fails rather than choosing a surprise fallback port.         |
+| `PORT`                                                                      | Required for this VPS design                          | Set to `3003`; do not open it publicly. Production fails rather than choosing a surprise fallback port.         |
 | `DATABASE_URL`                                                              | Required                                              | A real `postgres://` or `postgresql://` URL.                                                                    |
 | `REDIS_URL`                                                                 | Recommended                                           | Loopback/private Redis for distributed rate limits; configured Redis fails closed if unavailable.               |
 | `JWT_SECRET`                                                                | Required                                              | Generate a long random server-only value, for example `openssl rand -base64 48`.                                |
@@ -100,7 +100,7 @@ Confirm that all migrations through `0007_modern_eternals.sql` have been applied
 
 ## 5. Build and run with PM2
 
-Build before starting PM2. The committed [`ecosystem.config.cjs`](../ecosystem.config.cjs) runs one forked `SUBBY-VIRTUAL` process from `dist/index.js`, fixes `NODE_ENV=production`, `HOST=127.0.0.1`, and `PORT=3000`, enables automatic restart, disables file watching, and contains no credentials.
+Build before starting PM2. The committed [`ecosystem.config.cjs`](../ecosystem.config.cjs) runs one forked `SUBBY-VIRTUAL` process from `dist/index.js`, fixes `NODE_ENV=production`, `HOST=127.0.0.1`, and `PORT=3003`, enables automatic restart, disables file watching, and contains no credentials.
 
 ```sh
 cd /var/www/subby-virtual
@@ -136,7 +136,7 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-Nginx forwards the original host and HTTPS protocol to the loopback service. Express trusts exactly one proxy hop in production; this is appropriate only while Nginx is the sole local reverse proxy. Do not make the Node process publicly reachable, and do not send untrusted direct traffic to `127.0.0.1:3000`.
+Nginx forwards the original host and HTTPS protocol to the loopback service. Express trusts exactly one proxy hop in production; this is appropriate only while Nginx is the sole local reverse proxy. Do not make the Node process publicly reachable, and do not send untrusted direct traffic to `127.0.0.1:3003`.
 
 Once DNS resolves to the VPS and port `80` is publicly reachable, install Certbot using its current official instructions and let its Nginx integration create the HTTPS virtual host and HTTP-to-HTTPS redirect.[2]
 
@@ -151,7 +151,7 @@ Certbot’s HTTP validation requires a reachable HTTP site on port `80`; its Ngi
 
 ## 7. Firewall
 
-Allow SSH before enabling UFW, then expose Nginx only. PostgreSQL `5432`, Redis `6379`, and Node `3000` remain private.
+Allow SSH before enabling UFW, then expose Nginx only. PostgreSQL `5432`, Redis `6379`, and Node `3003` remain private.
 
 ```sh
 sudo ufw allow OpenSSH
@@ -167,7 +167,7 @@ Also verify the VPS provider’s firewall/security group permits only the intend
 The public `GET /health` endpoint returns a safe liveness payload with `providerMode`, safe database mode/reachability information, and scheduled dispatcher readiness. It never returns credentials, connection strings, secrets, or stack traces.
 
 ```sh
-curl --fail --silent --show-error http://127.0.0.1:3000/health
+curl --fail --silent --show-error http://127.0.0.1:3003/health
 curl --fail --silent --show-error https://subby.kdns.fr/health
 ```
 

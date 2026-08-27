@@ -26,14 +26,14 @@ describe("VPS deployment artifacts", () => {
     expect(pm2).toContain('script: "dist/index.js"');
     expect(pm2).toContain("instances: 1");
     expect(pm2).toContain('HOST: "127.0.0.1"');
-    expect(pm2).toContain('PORT: "3000"');
+    expect(pm2).toContain('PORT: "3003"');
     expect(pm2).not.toMatch(/JWT_SECRET|DATABASE_URL|REDIS_URL/);
   });
 
   it("proxies the domain only to the local application port with required forwarded headers", () => {
     const nginx = readProjectFile("deploy/nginx/subby.kdns.fr.conf");
     expect(nginx).toContain("server_name subby.kdns.fr;");
-    expect(nginx).toContain("proxy_pass http://127.0.0.1:3000;");
+    expect(nginx).toContain("proxy_pass http://127.0.0.1:3003;");
     expect(nginx).toContain("proxy_set_header Host $host;");
     expect(nginx).toContain("proxy_set_header X-Forwarded-Proto $scheme;");
     expect(nginx).not.toContain("ssl_certificate");

@@ -275,3 +275,10 @@
 - [x] Add a complete VPS deployment guide covering PostgreSQL, migrations, PM2, Nginx, Certbot, UFW, scheduled dispatcher operation, smoke tests, rollback, and updates
 - [x] Run lint, TypeScript checks, the full test suite, and production build; verify deployment artifacts without deploying to the VPS
 - [x] Save a checkpoint, synchronize the deployment-readiness commit to GitHub main, and report the exact SHA
+
+# Deployment port correction
+
+- [x] Change the SUBBY VIRTUAL deployment binding and reverse-proxy port from 3001 to dedicated port 3003 in the specified deployment artifacts and tests
+- [x] Remove the accidental untracked `t --activate` file without touching any running service or VPS configuration
+- [x] Verify no relevant SUBBY VIRTUAL deployment artifact retains port 3001 or 3000 where port 3003 is required; run diff checks and targeted/full tests
+- [ ] Commit and push the verified port correction to GitHub main with the requested clear message
