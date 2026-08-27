@@ -23,6 +23,10 @@ const migration = readFileSync(
   new URL("../drizzle/0004_great_devos.sql", import.meta.url),
   "utf8"
 );
+const auditLogMigration = readFileSync(
+  new URL("../drizzle/0001_pink_legion.sql", import.meta.url),
+  "utf8"
+);
 
 describe("PostgreSQL migration contract", () => {
   it("keeps the Drizzle journal ordered and PostgreSQL-specific", () => {
@@ -32,6 +36,12 @@ describe("PostgreSQL migration contract", () => {
       journal.entries.map((_, index) => index)
     );
     expect(journal.entries.at(-1)?.tag).toBe("0007_modern_eternals");
+  });
+
+  it("casts existing audit-log metadata explicitly when converting to jsonb", () => {
+    expect(auditLogMigration).toContain(
+      'ALTER TABLE "auditLogs" ALTER COLUMN "metadata" SET DATA TYPE jsonb USING "metadata"::jsonb;--> statement-breakpoint'
+    );
   });
 
   it("matches message columns and uses additive unique constraints", () => {

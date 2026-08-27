@@ -289,3 +289,10 @@
 - [x] Rename the Nginx deployment artifact and update every test and documentation reference consistently
 - [x] Verify no old deployment-domain reference remains, validate port 3003 preservation, run diff checks and relevant tests
 - [x] Commit and push the verified domain correction to GitHub main without touching live VPS services
+
+# PostgreSQL audit-log migration compatibility correction
+
+- [x] Add the required USING "metadata"::jsonb conversion to drizzle/0001_pink_legion.sql without changing its breakpoint, sequence, or unrelated SQL
+- [x] Add focused regression coverage for the audit-log jsonb conversion statement
+- [x] Run migration-focused validation and verify the isolated diff contains no port, domain, database-configuration, or unrelated migration changes
+- [ ] Save a checkpoint, commit the verified fix, push it to GitHub main, and report the commit SHA
