@@ -288,4 +288,4 @@
 - [x] Replace subby.kdns.fr with subomivirtual.kdns.fr in all SUBBY VIRTUAL deployment and VPS artifacts, retaining loopback port 3003
 - [x] Rename the Nginx deployment artifact and update every test and documentation reference consistently
 - [x] Verify no old deployment-domain reference remains, validate port 3003 preservation, run diff checks and relevant tests
-- [ ] Commit and push the verified domain correction to GitHub main without touching live VPS services
+- [x] Commit and push the verified domain correction to GitHub main without touching live VPS services
