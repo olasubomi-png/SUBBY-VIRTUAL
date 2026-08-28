@@ -4,10 +4,31 @@ export type DemoActivation = {
   country: string;
   serviceId: string;
   phoneNumber: string;
-  status: "ACTIVE" | "MESSAGE_RECEIVED" | "COMPLETED" | "EXPIRED" | "CANCELLED";
+  status:
+    | "pending"
+    | "allocating"
+    | "active"
+    | "code_received"
+    | "completed"
+    | "cancelled"
+    | "expired"
+    | "failed"
+    // Legacy aliases kept for older in-memory records during transition
+    | "ACTIVE"
+    | "MESSAGE_RECEIVED"
+    | "COMPLETED"
+    | "EXPIRED"
+    | "CANCELLED"
+    | "WAITING";
   priceMinor: number;
+  currency?: "NGN" | "USD";
+  idempotencyKey?: string;
+  providerReference?: string;
+  verificationCode?: string;
   createdAt: string;
+  updatedAt?: string;
   expiresAt: string;
+  cancelledAt?: string;
   message?: { sender: string; body: string; receivedAt: string };
 };
 
@@ -146,17 +167,37 @@ export function createDemoActivation(input: {
   country: string;
   serviceId: string;
   priceMinor: number;
+  currency?: "NGN" | "USD";
+  idempotencyKey?: string;
+  status?: DemoActivation["status"];
+  phoneNumber?: string;
+  providerReference?: string;
 }) {
-  const id = `demo-activation-${input.userId}-${Date.now()}`;
+  if (input.idempotencyKey) {
+    const existing = Array.from(activations.values()).find(
+      item =>
+        item.userId === input.userId &&
+        item.idempotencyKey === input.idempotencyKey
+    );
+    if (existing) return existing;
+  }
+  const id = input.idempotencyKey
+    ? `sms-order-${input.userId}-${input.idempotencyKey}`
+    : `demo-activation-${input.userId}-${Date.now()}`;
+  const createdAt = now();
   const activation: DemoActivation = {
     id,
     userId: input.userId,
     country: input.country,
     serviceId: input.serviceId,
-    phoneNumber: demoPhoneForCountry(input.country),
-    status: "ACTIVE",
+    phoneNumber: input.phoneNumber ?? demoPhoneForCountry(input.country),
+    status: input.status ?? "active",
     priceMinor: input.priceMinor,
-    createdAt: now(),
+    currency: input.currency ?? "NGN",
+    idempotencyKey: input.idempotencyKey,
+    providerReference: input.providerReference,
+    createdAt,
+    updatedAt: createdAt,
     expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
   };
   activations.set(id, activation);
@@ -169,28 +210,49 @@ export function getActivation(userId: number, id: string) {
 }
 export function simulateSms(userId: number, id: string) {
   const item = getActivation(userId, id);
-  if (item.status !== "ACTIVE") throw new Error("Invalid activation state");
-  item.status = "COMPLETED";
+  const allowed = new Set(["ACTIVE", "active", "code_received", "WAITING"]);
+  if (!allowed.has(item.status)) throw new Error("Invalid activation state");
+  item.status = "completed";
+  item.verificationCode = item.verificationCode ?? "482913";
+  item.updatedAt = now();
   item.message = {
     sender: "SUBBY-DEMO",
-    body: "Your simulated verification code is 482913.",
-    receivedAt: now(),
+    body: `Your simulated verification code is ${item.verificationCode}.`,
+    receivedAt: item.updatedAt,
   };
   return item;
 }
 export function cancelSms(userId: number, id: string) {
   const item = getActivation(userId, id);
-  if (item.status !== "ACTIVE")
+  const cancellable = new Set([
+    "ACTIVE",
+    "active",
+    "pending",
+    "allocating",
+    "code_received",
+    "WAITING",
+  ]);
+  if (!cancellable.has(item.status))
     throw new Error("Activation cannot be cancelled");
-  item.status = "CANCELLED";
+  item.status = "cancelled";
+  item.cancelledAt = now();
+  item.updatedAt = item.cancelledAt;
   return item;
 }
 export function expireActivation(userId: number, id: string) {
   const item = getActivation(userId, id);
-  if (item.status === "EXPIRED") return item;
-  if (item.status !== "ACTIVE")
+  if (item.status === "EXPIRED" || item.status === "expired") return item;
+  const expirable = new Set([
+    "ACTIVE",
+    "active",
+    "pending",
+    "allocating",
+    "WAITING",
+  ]);
+  if (!expirable.has(item.status))
     throw new Error("Activation cannot be expired in its current state");
-  item.status = "EXPIRED";
+  item.status = "expired";
+  item.updatedAt = now();
   return item;
 }
 export function listActivations(userId: number) {

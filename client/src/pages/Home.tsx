@@ -586,7 +586,13 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
                 </label>
                 <Button
                   disabled={createSms.isPending}
-                  onClick={() => createSms.mutate({ country, serviceId })}
+                  onClick={() =>
+                    createSms.mutate({
+                      country,
+                      serviceId,
+                      idempotencyKey: crypto.randomUUID(),
+                    })
+                  }
                   className="h-11 w-full rounded-lg bg-cyan-300 font-semibold text-slate-950 hover:bg-cyan-200"
                 >
                   {createSms.isPending ? "Creating…" : "Get demo number"}

@@ -55,7 +55,11 @@ describe("workspace authorization and validation", () => {
   it("rejects invalid SMS request input", async () => {
     const caller = appRouter.createCaller({ ...base, user });
     await expect(
-      caller.workspace.createSmsRequest({ country: "", serviceId: "x" })
+      caller.workspace.createSmsRequest({
+        country: "",
+        serviceId: "x",
+        idempotencyKey: "00000000-0000-4000-8000-000000000001",
+      })
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
   it("blocks repeated SMS requests after the abuse-control threshold", async () => {
@@ -68,9 +72,14 @@ describe("workspace authorization and validation", () => {
       await caller.workspace.createSmsRequest({
         country: "NG",
         serviceId: "verify",
+        idempotencyKey: `00000000-0000-4000-8000-00000000000${attempt}`,
       });
     await expect(
-      caller.workspace.createSmsRequest({ country: "NG", serviceId: "verify" })
+      caller.workspace.createSmsRequest({
+        country: "NG",
+        serviceId: "verify",
+        idempotencyKey: "00000000-0000-4000-8000-000000000099",
+      })
     ).rejects.toThrow("Request rate limit exceeded");
   });
   it("exposes safe database health only to administrators", async () => {

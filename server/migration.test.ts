@@ -31,7 +31,7 @@ describe("PostgreSQL migration contract", () => {
     expect(journal.entries.map(entry => entry.idx)).toEqual(
       journal.entries.map((_, index) => index)
     );
-    expect(journal.entries.at(-1)?.tag).toBe("0008_dapper_shinobi_shaw");
+    expect(journal.entries.at(-1)?.tag).toBe("0009_sms_order_lifecycle");
   });
 
   it("matches message columns and uses additive unique constraints", () => {
@@ -99,5 +99,28 @@ describe("PostgreSQL migration contract", () => {
     expect(indexMigration).toContain('CREATE INDEX "users_name_search_idx"');
     expect(indexMigration).toContain('CREATE INDEX "users_created_order_idx"');
     expect(indexMigration).not.toMatch(/DROP TABLE|DROP COLUMN|ALTER TABLE/);
+  });
+
+  it("adds SMS order lifecycle columns additively", () => {
+    const lifecycleMigration = readFileSync(
+      new URL("../drizzle/0009_sms_order_lifecycle.sql", import.meta.url),
+      "utf8"
+    );
+    expect(lifecycleMigration).toContain(
+      'ALTER TABLE "smsActivations" ADD COLUMN "idempotencyKey"'
+    );
+    expect(lifecycleMigration).toContain(
+      'ALTER TABLE "smsActivations" ADD COLUMN "providerReference"'
+    );
+    expect(lifecycleMigration).toContain(
+      'ALTER TABLE "smsActivations" ADD COLUMN "verificationCode"'
+    );
+    expect(lifecycleMigration).toContain(
+      'ALTER TABLE "smsActivations" ADD COLUMN "cancelledAt"'
+    );
+    expect(lifecycleMigration).toContain(
+      'sms_activations_user_idempotency_uidx'
+    );
+    expect(lifecycleMigration).not.toMatch(/DROP TABLE|DROP COLUMN/);
   });
 });

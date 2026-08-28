@@ -31,8 +31,9 @@ describe("Step 2 end-to-end demo flow", () => {
     const activation = await caller.workspace.createSmsRequest({
       country: "NG",
       serviceId: "verify",
+      idempotencyKey: "00000000-0000-4000-8000-000000000001",
     });
-    expect(activation.status).toBe("ACTIVE");
+    expect(activation.status).toBe("active");
     expect(activation.walletBalanceMinor).toBe(85000);
     const smsJob = await caller.workspace.simulateSms({ id: activation.id });
     expect(smsJob.status).toBe("QUEUED");
@@ -40,7 +41,7 @@ describe("Step 2 end-to-end demo flow", () => {
     const completed = await caller.workspace.smsRequestDetail({
       id: activation.id,
     });
-    expect(completed.status).toBe("COMPLETED");
+    expect(completed.status).toBe("completed");
     expect(completed.message?.body).toContain("482913");
     const inbox = await caller.workspace.createMailInbox({
       label: "verification",
@@ -67,9 +68,10 @@ describe("Step 2 end-to-end demo flow", () => {
     const activation = await caller.workspace.createSmsRequest({
       country: "NG",
       serviceId: "verify",
+      idempotencyKey: "00000000-0000-4000-8000-000000000002",
     });
     const cancelled = await caller.workspace.cancelSms({ id: activation.id });
-    expect(cancelled.status).toBe("CANCELLED");
+    expect(cancelled.status).toBe("cancelled");
     await expect(
       caller.workspace.simulateSms({ id: activation.id })
     ).rejects.toThrow("Invalid activation state");
@@ -91,6 +93,7 @@ describe("Step 2 end-to-end demo flow", () => {
     const activation = await owner.workspace.createSmsRequest({
       country: "GB",
       serviceId: "sandbox",
+      idempotencyKey: "00000000-0000-4000-8000-000000000003",
     });
     const inbox = await owner.workspace.createMailInbox({ label: "private" });
     await expect(
@@ -112,6 +115,7 @@ describe("duplicate simulation protection", () => {
     const activation = await caller.workspace.createSmsRequest({
       country: "NG",
       serviceId: "verify",
+      idempotencyKey: "00000000-0000-4000-8000-000000000004",
     });
     const firstSms = await caller.workspace.simulateSms({ id: activation.id });
     const secondSms = await caller.workspace.simulateSms({ id: activation.id });

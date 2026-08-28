@@ -78,7 +78,7 @@ describe("fallback job lifecycle", () => {
 
     expect(summary).toMatchObject({ claimed: 1, completed: 1, failed: 0 });
     expect(detail).toMatchObject({ status: "COMPLETED", progress: 100 });
-    expect(getActivation(user.id, activation.id).status).toBe("COMPLETED");
+    expect(["COMPLETED", "completed"]).toContain(getActivation(user.id, activation.id).status);
     expect(activity.map(event => event.eventType)).toEqual(
       expect.arrayContaining([
         "created",
@@ -291,7 +291,7 @@ describe("fallback job lifecycle", () => {
     const raw = getFallbackJobByExternalId(job.id)!;
     raw.nextRunAt = new Date(Date.now() - 1).toISOString();
     await expect(dispatchQueuedJobs()).resolves.toMatchObject({ completed: 1 });
-    expect(getActivation(user.id, activation.id).status).toBe("COMPLETED");
+    expect(["COMPLETED", "completed"]).toContain(getActivation(user.id, activation.id).status);
   });
 
   it("fails an injected permanent queued-workflow error safely without false completion", async () => {
@@ -316,7 +316,7 @@ describe("fallback job lifecycle", () => {
       status: "FAILED",
       error: { code: "DOMAIN_ERROR" },
     });
-    expect(getActivation(user.id, activation.id).status).toBe("ACTIVE");
+    expect(["ACTIVE", "active"]).toContain(getActivation(user.id, activation.id).status);
   });
 
   it("keeps queue-authoritative simulation ownership and redaction boundaries explicit", async () => {

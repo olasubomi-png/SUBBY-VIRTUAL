@@ -22,6 +22,12 @@ import {
 } from "./_core/trpc";
 import { z } from "zod";
 import { LocalDemoMailProvider, MockSMSProvider } from "./domain";
+import {
+  cancelSmsOrder,
+  createSmsOrder,
+  getSmsOrder,
+  listSmsOrders,
+} from "./smsOrders";
 import type { DemoActivation, DemoInbox } from "./demoState";
 import { createAuditEvent, type AuditEvent } from "./security";
 import { checkDistributedRateLimit } from "./redis";
@@ -222,13 +228,23 @@ export const appRouter = router({
         ? await listPersistentInboxes(ctx.user.id)
         : listInboxes(ctx.user.id);
       const completed = activations.filter(
-        item => item.status === "COMPLETED"
+        item =>
+          item.status === "COMPLETED" ||
+          item.status === "completed" ||
+          item.status === "code_received"
       ).length;
       return {
         user: ctx.user.name ?? "Customer",
         balance: { NGN: wallet.balance, USD: 0 },
         activeRequests:
-          activations.filter(item => item.status === "ACTIVE").length +
+          activations.filter(
+            item =>
+              item.status === "ACTIVE" ||
+              item.status === "active" ||
+              item.status === "pending" ||
+              item.status === "allocating" ||
+              item.status === "WAITING"
+          ).length +
           inboxes.filter(item => item.status === "ACTIVE").length,
         successRate: activations.length
           ? Number(((completed / activations.length) * 100).toFixed(1))
@@ -270,21 +286,11 @@ export const appRouter = router({
         };
       }),
     smsRequests: protectedProcedure.query(async ({ ctx }) =>
-      shouldUsePersistentStore()
-        ? listPersistentActivations(ctx.user.id)
-        : listActivations(ctx.user.id)
+      listSmsOrders(ctx.user.id)
     ),
     smsRequestDetail: protectedProcedure
       .input(z.object({ id: z.string().min(1).max(120) }))
-      .query(
-        async ({ input, ctx }): Promise<DemoActivation> =>
-          shouldUsePersistentStore()
-            ? ((await getPersistentActivation(
-                ctx.user.id,
-                input.id
-              )) as DemoActivation)
-            : getActivation(ctx.user.id, input.id)
-      ),
+      .query(async ({ input, ctx }) => getSmsOrder(ctx.user.id, input.id)),
     simulateSms: protectedProcedure
       .input(z.object({ id: z.string().min(1).max(120) }))
       .mutation(async ({ input, ctx }) =>
@@ -293,9 +299,25 @@ export const appRouter = router({
     cancelSms: protectedProcedure
       .input(z.object({ id: z.string().min(1).max(120) }))
       .mutation(async ({ input, ctx }) => {
-        if (shouldUsePersistentStore())
-          return cancelPersistentActivation(ctx.user.id, input.id);
-        return cancelSms(ctx.user.id, input.id);
+        try {
+          return await cancelSmsOrder(ctx.user.id, input.id);
+        } catch (error) {
+          if (error instanceof Error) {
+            const safe = new Set([
+              "Activation not found",
+              "Activation cannot be cancelled",
+              "SMS order is terminal and cannot be cancelled",
+              "Invalid SMS order transition: completed → cancelled",
+              "Invalid SMS order transition: cancelled → cancelled",
+              "Invalid SMS order transition: expired → cancelled",
+              "Invalid SMS order transition: failed → cancelled",
+            ]);
+            // Allow lifecycle transition errors through as safe messages
+            if (safe.has(error.message) || error.message.startsWith("Invalid SMS order transition"))
+              throw error;
+          }
+          throw new Error("Unable to cancel SMS order");
+        }
       }),
     mailInboxes: protectedProcedure.query(async ({ ctx }) =>
       shouldUsePersistentStore()
@@ -332,6 +354,7 @@ export const appRouter = router({
         z.object({
           country: z.string().min(2).max(3),
           serviceId: z.string().min(2).max(40),
+          idempotencyKey: z.string().uuid(),
         })
       )
       .mutation(async ({ input, ctx }) => {
@@ -339,80 +362,57 @@ export const appRouter = router({
           !(await checkDistributedRateLimit(`subby:sms:${ctx.user.id}`, 5, 60))
         )
           throw new Error("Request rate limit exceeded");
-        const countries = await sms.getCountries();
-        if (!countries.some(item => item.code === input.country)) {
-          throw new Error("Unknown SMS country");
-        }
-        const pricing = await sms.getPricing();
-        const quote = pricing.find(item => item.serviceId === input.serviceId);
-        if (!quote) throw new Error("Unknown SMS service");
-        const reference = `sms-${ctx.user.id}-${Date.now()}`;
-        const wallet = shouldUsePersistentStore()
-          ? await debitPersistentWallet(
-              ctx.user.id,
-              quote.amount,
-              `${quote.serviceId} demo activation`,
-              reference
-            )
-          : debitDemoCredits(
-              ctx.user.id,
-              quote.amount,
-              `${quote.serviceId} demo activation`,
-              reference
-            );
-        const activation = await sms.buyActivation({
-          ...input,
-          userId: ctx.user.id,
-        });
-        const demoActivation = createDemoActivation({
-          userId: ctx.user.id,
-          country: input.country,
-          serviceId: input.serviceId,
-          priceMinor: quote.amount,
-        });
-        if (shouldUsePersistentStore()) {
-          await persistActivation({
+        try {
+          const result = await createSmsOrder({
             userId: ctx.user.id,
-            externalId: demoActivation.id,
-            providerType: "MOCK",
-            countryCode: input.country,
+            country: input.country,
             serviceId: input.serviceId,
-            phoneNumber: activation.phoneNumber,
-            status: "WAITING",
-            quotedPriceMinor: quote.amount,
-            currency: "NGN",
+            idempotencyKey: input.idempotencyKey,
+            provider: sms,
+            providerType: "MOCK",
           });
-          await writeAuditLog({
-            actorUserId: ctx.user.id,
-            action: "sms.request.created",
-            targetType: "smsActivation",
-            targetId: activation.id,
-            metadata: {
-              mode: "mock",
-              country: input.country,
-              serviceId: input.serviceId,
-            },
-          });
+          if (shouldUsePersistentStore() && !result.reused) {
+            await writeAuditLog({
+              actorUserId: ctx.user.id,
+              action: "sms.request.created",
+              targetType: "smsActivation",
+              targetId: result.id,
+              metadata: {
+                mode: "mock",
+                country: input.country,
+                serviceId: input.serviceId,
+              },
+            });
+          }
+          auditEvents.push(
+            createAuditEvent({
+              actorId: ctx.user.id,
+              action: "sms.request.created",
+              targetType: "smsActivation",
+              targetId: result.id,
+              metadata: {
+                mode: "mock",
+                country: input.country,
+                serviceId: input.serviceId,
+              },
+            })
+          );
+          return result;
+        } catch (error) {
+          if (error instanceof Error) {
+            const safe = new Set([
+              "Unknown SMS country",
+              "Unknown SMS service",
+              "Insufficient balance",
+              "Idempotency key is required",
+              "Unable to allocate SMS number",
+              "Invalid currency",
+              "Request rate limit exceeded",
+            ]);
+            if (safe.has(error.message)) throw error;
+          }
+          throw new Error("Unable to create SMS order");
         }
-        auditEvents.push(
-          createAuditEvent({
-            actorId: ctx.user.id,
-            action: "sms.request.created",
-            targetType: "smsActivation",
-            targetId: activation.id,
-            metadata: {
-              mode: "mock",
-              country: input.country,
-              serviceId: input.serviceId,
-            },
-          })
-        );
-        return {
-          ...demoActivation,
-          providerActivationId: activation.id,
-          walletBalanceMinor: wallet.balanceMinor,
-          audit: "Mock request created; no external provider contacted.",
-        };
       }),
     createMailInbox: protectedProcedure
       .input(z.object({ label: z.string().trim().min(2).max(40) }))

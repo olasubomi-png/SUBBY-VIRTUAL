@@ -119,27 +119,40 @@ export const transactions = pgTable("transactions", {
   reference: varchar("reference", { length: 120 }).notNull().unique(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
-export const smsActivations = pgTable("smsActivations", {
-  id: serial("id").primaryKey(),
-  externalId: varchar("externalId", { length: 120 }).unique(),
-  userId: integer("userId").notNull(),
-  providerId: integer("providerId"),
-  providerType: varchar("providerType", { length: 16 })
-    .notNull()
-    .default("MOCK"),
-  countryCode: varchar("countryCode", { length: 3 }).notNull(),
-  serviceId: varchar("serviceId", { length: 64 }).notNull(),
-  phoneNumber: varchar("phoneNumber", { length: 32 }),
-  status: varchar("status", { length: 16 }).notNull(),
-  quotedPriceMinor: bigint("quotedPriceMinor", { mode: "number" })
-    .notNull()
-    .default(0),
-  currency: varchar("currency", { length: 3 }).notNull().default("NGN"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-  expiresAt: timestamp("expiresAt"),
-  completedAt: timestamp("completedAt"),
-});
+export const smsActivations = pgTable(
+  "smsActivations",
+  {
+    id: serial("id").primaryKey(),
+    externalId: varchar("externalId", { length: 120 }).unique(),
+    userId: integer("userId").notNull(),
+    providerId: integer("providerId"),
+    providerType: varchar("providerType", { length: 16 })
+      .notNull()
+      .default("MOCK"),
+    countryCode: varchar("countryCode", { length: 3 }).notNull(),
+    serviceId: varchar("serviceId", { length: 64 }).notNull(),
+    phoneNumber: varchar("phoneNumber", { length: 32 }),
+    status: varchar("status", { length: 16 }).notNull(),
+    quotedPriceMinor: bigint("quotedPriceMinor", { mode: "number" })
+      .notNull()
+      .default(0),
+    currency: varchar("currency", { length: 3 }).notNull().default("NGN"),
+    idempotencyKey: varchar("idempotencyKey", { length: 120 }),
+    providerReference: varchar("providerReference", { length: 120 }),
+    verificationCode: varchar("verificationCode", { length: 32 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+    expiresAt: timestamp("expiresAt"),
+    completedAt: timestamp("completedAt"),
+    cancelledAt: timestamp("cancelledAt"),
+  },
+  table => ({
+    userIdempotency: uniqueIndex("sms_activations_user_idempotency_uidx").on(
+      table.userId,
+      table.idempotencyKey
+    ),
+  })
+);
 export const smsMessages = pgTable("smsMessages", {
   id: serial("id").primaryKey(),
   externalId: varchar("externalId", { length: 120 }).unique(),

@@ -784,7 +784,13 @@ export async function completePersistentActivation(input: {
       .limit(1);
     const activation = rows[0];
     if (!activation) throw new Error("Activation not found");
-    if (activation.status !== "WAITING" && activation.status !== "ACTIVE") {
+    const completable = new Set([
+      "WAITING",
+      "ACTIVE",
+      "active",
+      "code_received",
+    ]);
+    if (!completable.has(activation.status)) {
       const message = await tx
         .select()
         .from(smsMessages)
@@ -808,9 +814,11 @@ export async function completePersistentActivation(input: {
     const updated = await tx
       .update(smsActivations)
       .set({
-        status: "COMPLETED",
+        status: "completed",
         completedAt: input.receivedAt,
         updatedAt: input.receivedAt,
+        verificationCode:
+          input.body.match(/\d{4,8}/)?.[0] ?? activation.verificationCode,
       })
       .where(
         and(
@@ -889,11 +897,20 @@ export async function cancelPersistentActivation(
     )
     .limit(1);
   if (!rows[0]) throw new Error("Activation not found");
-  if (rows[0].status !== "WAITING" && rows[0].status !== "ACTIVE")
+  const cancellable = new Set([
+    "WAITING",
+    "ACTIVE",
+    "pending",
+    "allocating",
+    "active",
+    "code_received",
+  ]);
+  if (!cancellable.has(rows[0].status))
     throw new Error("Activation cannot be cancelled");
+  const now = new Date();
   const updated = await db
     .update(smsActivations)
-    .set({ status: "CANCELLED", updatedAt: new Date() })
+    .set({ status: "cancelled", updatedAt: now, cancelledAt: now })
     .where(
       and(
         eq(smsActivations.userId, userId),
@@ -1448,21 +1465,25 @@ export async function expirePersistentActivation(
     )
     .limit(1);
   if (!rows[0]) throw new Error("Activation not found");
-  if (rows[0].status === "EXPIRED") return rows[0];
-  if (rows[0].status !== "WAITING" && rows[0].status !== "ACTIVE")
+  if (rows[0].status === "EXPIRED" || rows[0].status === "expired")
+    return rows[0];
+  const expirable = new Set([
+    "WAITING",
+    "ACTIVE",
+    "pending",
+    "allocating",
+    "active",
+  ]);
+  if (!expirable.has(rows[0].status))
     throw new Error("Activation cannot be expired in its current state");
   const now = new Date();
   const updated = await db
     .update(smsActivations)
-    .set({ status: "EXPIRED", updatedAt: now })
+    .set({ status: "expired", updatedAt: now })
     .where(
       and(
         eq(smsActivations.userId, userId),
-        eq(smsActivations.externalId, externalId),
-        or(
-          eq(smsActivations.status, "WAITING"),
-          eq(smsActivations.status, "ACTIVE")
-        )
+        eq(smsActivations.externalId, externalId)
       )
     )
     .returning();
@@ -1481,4 +1502,211 @@ export async function getPersistentAdminJob(externalId: string) {
     .limit(1);
   if (!rows[0]) throw new Error("Job not found");
   return safePersistentJob(rows[0]);
+}
+
+
+export type CreateSmsOrderAtomicInput = {
+  userId: number;
+  externalId: string;
+  idempotencyKey: string;
+  providerType: string;
+  countryCode: string;
+  serviceId: string;
+  quotedPriceMinor: number;
+  currency: "NGN" | "USD";
+  status: string;
+  expiresAt: Date;
+  debitReason: string;
+  debitReference: string;
+};
+
+/**
+ * Atomically create an SMS order and debit the wallet once.
+ * Idempotent on (userId, idempotencyKey) and ledger reference.
+ */
+export async function createSmsOrderAtomic(input: CreateSmsOrderAtomicInput) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  return db.transaction(async tx => {
+    const existing = await tx
+      .select()
+      .from(smsActivations)
+      .where(
+        and(
+          eq(smsActivations.userId, input.userId),
+          eq(smsActivations.idempotencyKey, input.idempotencyKey)
+        )
+      )
+      .limit(1);
+    if (existing[0]) {
+      const balance = await getWalletBalanceTx(tx, input.userId);
+      return {
+        order: {
+          id: existing[0].externalId ?? String(existing[0].id),
+          status: existing[0].status,
+        },
+        balanceMinor: balance,
+        reused: true as const,
+      };
+    }
+
+    const walletRows = await tx
+      .select()
+      .from(wallets)
+      .where(
+        and(eq(wallets.userId, input.userId), eq(wallets.currency, input.currency))
+      )
+      .limit(1);
+    let wallet = walletRows[0];
+    if (!wallet) {
+      const insertedWallet = await tx
+        .insert(wallets)
+        .values({ userId: input.userId, currency: input.currency })
+        .returning();
+      wallet = insertedWallet[0];
+    }
+
+    const balanceResult = await tx
+      .select({
+        balance: sql<number>`coalesce(sum(case when ${walletLedgerEntries.type} = 'CREDIT' then ${walletLedgerEntries.amountMinor} else -${walletLedgerEntries.amountMinor} end), 0)`,
+      })
+      .from(walletLedgerEntries)
+      .where(eq(walletLedgerEntries.walletId, wallet.id));
+    const balance = Number(balanceResult[0]?.balance ?? 0);
+    if (balance < input.quotedPriceMinor) throw new Error("Insufficient balance");
+
+    const ledgerDup = await tx
+      .select()
+      .from(walletLedgerEntries)
+      .where(eq(walletLedgerEntries.reference, input.debitReference))
+      .limit(1);
+
+    const now = new Date();
+    const inserted = await tx
+      .insert(smsActivations)
+      .values({
+        userId: input.userId,
+        externalId: input.externalId,
+        providerType: input.providerType,
+        countryCode: input.countryCode,
+        serviceId: input.serviceId,
+        status: input.status,
+        quotedPriceMinor: input.quotedPriceMinor,
+        currency: input.currency,
+        idempotencyKey: input.idempotencyKey,
+        expiresAt: input.expiresAt,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+
+    if (!ledgerDup[0]) {
+      await tx.insert(walletLedgerEntries).values({
+        walletId: wallet.id,
+        type: "DEBIT",
+        amountMinor: input.quotedPriceMinor,
+        reason: input.debitReason,
+        reference: input.debitReference,
+      });
+    }
+
+    const newBalance = balance - (ledgerDup[0] ? 0 : input.quotedPriceMinor);
+    return {
+      order: {
+        id: inserted[0].externalId ?? String(inserted[0].id),
+        status: inserted[0].status,
+      },
+      balanceMinor: newBalance,
+      reused: false as const,
+    };
+  });
+}
+
+async function getWalletBalanceTx(tx: any, userId: number) {
+  const walletRows = await tx
+    .select()
+    .from(wallets)
+    .where(and(eq(wallets.userId, userId), eq(wallets.currency, "NGN")))
+    .limit(1);
+  if (!walletRows[0]) return 0;
+  const balanceResult = await tx
+    .select({
+      balance: sql<number>`coalesce(sum(case when ${walletLedgerEntries.type} = 'CREDIT' then ${walletLedgerEntries.amountMinor} else -${walletLedgerEntries.amountMinor} end), 0)`,
+    })
+    .from(walletLedgerEntries)
+    .where(eq(walletLedgerEntries.walletId, walletRows[0].id));
+  return Number(balanceResult[0]?.balance ?? 0);
+}
+
+export async function findSmsOrderByIdempotencyKey(
+  userId: number,
+  idempotencyKey: string
+) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const rows = await db
+    .select()
+    .from(smsActivations)
+    .where(
+      and(
+        eq(smsActivations.userId, userId),
+        eq(smsActivations.idempotencyKey, idempotencyKey)
+      )
+    )
+    .limit(1);
+  if (!rows[0]) return null;
+  return {
+    id: rows[0].externalId ?? String(rows[0].id),
+    status: rows[0].status,
+    userId: rows[0].userId,
+  };
+}
+
+export async function transitionPersistentSmsOrder(input: {
+  userId: number;
+  externalId: string;
+  to: string;
+  phoneNumber?: string;
+  providerReference?: string;
+  verificationCode?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const { assertSmsOrderTransition, normalizeSmsOrderStatus } = await import(
+    "./smsOrderLifecycle"
+  );
+  return db.transaction(async tx => {
+    const rows = await tx
+      .select()
+      .from(smsActivations)
+      .where(
+        and(
+          eq(smsActivations.userId, input.userId),
+          eq(smsActivations.externalId, input.externalId)
+        )
+      )
+      .limit(1);
+    if (!rows[0]) throw new Error("Activation not found");
+    const from = normalizeSmsOrderStatus(rows[0].status);
+    const to = normalizeSmsOrderStatus(input.to);
+    assertSmsOrderTransition(from, to);
+    const now = new Date();
+    const patch: Record<string, unknown> = {
+      status: to,
+      updatedAt: now,
+    };
+    if (input.phoneNumber !== undefined) patch.phoneNumber = input.phoneNumber;
+    if (input.providerReference !== undefined)
+      patch.providerReference = input.providerReference;
+    if (input.verificationCode !== undefined)
+      patch.verificationCode = input.verificationCode;
+    if (to === "cancelled") patch.cancelledAt = now;
+    if (to === "completed") patch.completedAt = now;
+    const updated = await tx
+      .update(smsActivations)
+      .set(patch)
+      .where(eq(smsActivations.id, rows[0].id))
+      .returning();
+    return updated[0];
+  });
 }
