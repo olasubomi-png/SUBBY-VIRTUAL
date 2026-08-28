@@ -11,6 +11,7 @@ import {
   transactions,
   providers,
   jobs,
+  pointTopUpIntents,
 } from "../drizzle/schema";
 import { getDb } from "./db";
 import type { JobStatus, JobType } from "./jobTypes";
@@ -63,17 +64,27 @@ export async function getUserWalletSummary(userId: number) {
     .select()
     .from(walletLedgerEntries)
     .where(eq(walletLedgerEntries.walletId, wallet[0].id));
-  const balance = ledger.reduce(
-    (total, entry) =>
-      total +
-      (entry.type === "CREDIT" ? entry.amountMinor : -entry.amountMinor),
-    0
-  );
+  const balance = ledger.reduce((total, entry) => {
+    const credit =
+      entry.type === "CREDIT" ||
+      entry.type === "REFUND" ||
+      (entry.type === "ADMIN_ADJUSTMENT" && entry.direction === "credit");
+    return total + (credit ? entry.amountMinor : -entry.amountMinor);
+  }, 0);
   const creditsMinor = ledger
-    .filter(entry => entry.type === "CREDIT")
+    .filter(
+      entry =>
+        entry.type === "CREDIT" ||
+        entry.type === "REFUND" ||
+        (entry.type === "ADMIN_ADJUSTMENT" && entry.direction === "credit")
+    )
     .reduce((total, entry) => total + entry.amountMinor, 0);
   const spentMinor = ledger
-    .filter(entry => entry.type === "DEBIT")
+    .filter(
+      entry =>
+        entry.type === "DEBIT" ||
+        (entry.type === "ADMIN_ADJUSTMENT" && entry.direction === "debit")
+    )
     .reduce((total, entry) => total + entry.amountMinor, 0);
   return {
     currency: "NGN" as const,
@@ -93,7 +104,7 @@ export async function getPersistentWallet(userId: number) {
     spentMinor: summary.spentMinor,
     ledger: ledger.map(entry => ({
       id: String(entry.id),
-      type: entry.type as "CREDIT" | "DEBIT",
+      type: entry.type as "CREDIT" | "DEBIT" | "REFUND" | "ADMIN_ADJUSTMENT",
       amountMinor: entry.amountMinor,
       description: entry.reason,
       referenceId: entry.reference,
@@ -174,7 +185,7 @@ export async function getWalletBalance(walletId: number) {
   if (!db) throw new Error("DATABASE_URL is not configured");
   const result = await db
     .select({
-      balance: sql<number>`coalesce(sum(case when ${walletLedgerEntries.type} = 'CREDIT' then ${walletLedgerEntries.amountMinor} else -${walletLedgerEntries.amountMinor} end), 0)`,
+      balance: sql<number>`coalesce(sum(case when ${walletLedgerEntries.type} in ('CREDIT', 'REFUND') then ${walletLedgerEntries.amountMinor} when ${walletLedgerEntries.type} = 'ADMIN_ADJUSTMENT' and ${walletLedgerEntries.direction} = 'credit' then ${walletLedgerEntries.amountMinor} else -${walletLedgerEntries.amountMinor} end), 0)`,
     })
     .from(walletLedgerEntries)
     .where(eq(walletLedgerEntries.walletId, walletId));
@@ -183,13 +194,18 @@ export async function getWalletBalance(walletId: number) {
 
 export async function appendLedgerEntry(input: {
   walletId: number;
-  type: "CREDIT" | "DEBIT";
+  type: "CREDIT" | "DEBIT" | "REFUND" | "ADMIN_ADJUSTMENT";
   amountMinor: number;
   reason: string;
   reference: string;
+  direction?: "credit" | "debit";
+  actorUserId?: number;
 }) {
   if (!Number.isSafeInteger(input.amountMinor) || input.amountMinor <= 0)
     throw new Error("amountMinor must be a positive integer");
+  if (input.type === "ADMIN_ADJUSTMENT" && input.direction !== "credit" && input.direction !== "debit") {
+    throw new Error("ADMIN_ADJUSTMENT requires direction");
+  }
   const db = await getDb();
   if (!db) throw new Error("DATABASE_URL is not configured");
   return db.transaction(async tx => {
@@ -199,10 +215,13 @@ export async function appendLedgerEntry(input: {
       .where(eq(walletLedgerEntries.reference, input.reference))
       .limit(1);
     if (duplicate[0]) return duplicate[0];
-    if (input.type === "DEBIT") {
+    const isDebit =
+      input.type === "DEBIT" ||
+      (input.type === "ADMIN_ADJUSTMENT" && input.direction === "debit");
+    if (isDebit) {
       const balance = await tx
         .select({
-          balance: sql<number>`coalesce(sum(case when ${walletLedgerEntries.type} = 'CREDIT' then ${walletLedgerEntries.amountMinor} else -${walletLedgerEntries.amountMinor} end), 0)`,
+          balance: sql<number>`coalesce(sum(case when ${walletLedgerEntries.type} in ('CREDIT', 'REFUND') then ${walletLedgerEntries.amountMinor} when ${walletLedgerEntries.type} = 'ADMIN_ADJUSTMENT' and ${walletLedgerEntries.direction} = 'credit' then ${walletLedgerEntries.amountMinor} else -${walletLedgerEntries.amountMinor} end), 0)`,
         })
         .from(walletLedgerEntries)
         .where(eq(walletLedgerEntries.walletId, input.walletId));
@@ -1574,7 +1593,7 @@ export async function createSmsOrderAtomic(input: CreateSmsOrderAtomicInput) {
 
     const balanceResult = await tx
       .select({
-        balance: sql<number>`coalesce(sum(case when ${walletLedgerEntries.type} = 'CREDIT' then ${walletLedgerEntries.amountMinor} else -${walletLedgerEntries.amountMinor} end), 0)`,
+        balance: sql<number>`coalesce(sum(case when ${walletLedgerEntries.type} in ('CREDIT', 'REFUND') then ${walletLedgerEntries.amountMinor} when ${walletLedgerEntries.type} = 'ADMIN_ADJUSTMENT' and ${walletLedgerEntries.direction} = 'credit' then ${walletLedgerEntries.amountMinor} else -${walletLedgerEntries.amountMinor} end), 0)`,
       })
       .from(walletLedgerEntries)
       .where(eq(walletLedgerEntries.walletId, wallet.id));
@@ -1640,7 +1659,7 @@ async function getWalletBalanceTx(tx: any, userId: number) {
   if (!walletRows[0]) return 0;
   const balanceResult = await tx
     .select({
-      balance: sql<number>`coalesce(sum(case when ${walletLedgerEntries.type} = 'CREDIT' then ${walletLedgerEntries.amountMinor} else -${walletLedgerEntries.amountMinor} end), 0)`,
+      balance: sql<number>`coalesce(sum(case when ${walletLedgerEntries.type} in ('CREDIT', 'REFUND') then ${walletLedgerEntries.amountMinor} when ${walletLedgerEntries.type} = 'ADMIN_ADJUSTMENT' and ${walletLedgerEntries.direction} = 'credit' then ${walletLedgerEntries.amountMinor} else -${walletLedgerEntries.amountMinor} end), 0)`,
     })
     .from(walletLedgerEntries)
     .where(eq(walletLedgerEntries.walletId, walletRows[0].id));
@@ -1718,4 +1737,170 @@ export async function transitionPersistentSmsOrder(input: {
       .returning();
     return updated[0];
   });
+}
+
+
+export async function adminAdjustPoints(input: {
+  userId: number;
+  points: number;
+  direction: "credit" | "debit";
+  reason: string;
+  reference: string;
+  actorUserId: number;
+}) {
+  if (!Number.isSafeInteger(input.points) || input.points <= 0) {
+    throw new Error("Points must be a positive integer");
+  }
+  if (!input.reason.trim() || input.reason.length > 120) {
+    throw new Error("Adjustment reason is required");
+  }
+  const wallet = await ensureWallet(input.userId, "NGN");
+  await appendLedgerEntry({
+    walletId: wallet.id,
+    type: "ADMIN_ADJUSTMENT",
+    amountMinor: input.points,
+    reason: input.reason.trim(),
+    reference: input.reference,
+    direction: input.direction,
+    actorUserId: input.actorUserId,
+  });
+  return getPersistentWallet(input.userId);
+}
+
+export async function creditRefundPoints(
+  userId: number,
+  points: number,
+  reference: string,
+  reason = "SMS allocation refund"
+) {
+  const wallet = await ensureWallet(userId, "NGN");
+  await appendLedgerEntry({
+    walletId: wallet.id,
+    type: "REFUND",
+    amountMinor: points,
+    reason,
+    reference,
+  });
+  return getPersistentWallet(userId);
+}
+
+export async function createPointTopUpIntent(input: {
+  userId: number;
+  points: number;
+  amountMinor: number;
+  currency?: "NGN" | "USD";
+  idempotencyKey: string;
+}) {
+  if (!Number.isSafeInteger(input.points) || input.points <= 0) {
+    throw new Error("Points must be a positive integer");
+  }
+  if (!Number.isSafeInteger(input.amountMinor) || input.amountMinor <= 0) {
+    throw new Error("Amount must be a positive integer");
+  }
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const existing = await db
+    .select()
+    .from(pointTopUpIntents)
+    .where(
+      and(
+        eq(pointTopUpIntents.userId, input.userId),
+        eq(pointTopUpIntents.idempotencyKey, input.idempotencyKey)
+      )
+    )
+    .limit(1);
+  if (existing[0]) return existing[0];
+  const externalId = `topup-${input.userId}-${input.idempotencyKey}`;
+  const inserted = await db
+    .insert(pointTopUpIntents)
+    .values({
+      externalId,
+      userId: input.userId,
+      points: input.points,
+      amountMinor: input.amountMinor,
+      currency: input.currency ?? "NGN",
+      status: "pending",
+      idempotencyKey: input.idempotencyKey,
+    })
+    .returning();
+  return inserted[0];
+}
+
+/** Test/fixture only — completes a top-up and credits points once. */
+export async function completePointTopUpFixture(input: {
+  userId: number;
+  externalId: string;
+  paymentReference: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  return db.transaction(async tx => {
+    const rows = await tx
+      .select()
+      .from(pointTopUpIntents)
+      .where(
+        and(
+          eq(pointTopUpIntents.userId, input.userId),
+          eq(pointTopUpIntents.externalId, input.externalId)
+        )
+      )
+      .limit(1);
+    const intent = rows[0];
+    if (!intent) throw new Error("Top-up intent not found");
+    if (intent.status === "completed") return intent;
+    if (intent.status !== "pending" && intent.status !== "processing") {
+      throw new Error("Top-up intent cannot be completed");
+    }
+    const creditRef = `topup-credit-${intent.externalId}`;
+    const walletRows = await tx
+      .select()
+      .from(wallets)
+      .where(and(eq(wallets.userId, input.userId), eq(wallets.currency, "NGN")))
+      .limit(1);
+    let wallet = walletRows[0];
+    if (!wallet) {
+      const created = await tx
+        .insert(wallets)
+        .values({ userId: input.userId, currency: "NGN" })
+        .returning();
+      wallet = created[0];
+    }
+    const dup = await tx
+      .select()
+      .from(walletLedgerEntries)
+      .where(eq(walletLedgerEntries.reference, creditRef))
+      .limit(1);
+    if (!dup[0]) {
+      await tx.insert(walletLedgerEntries).values({
+        walletId: wallet.id,
+        type: "CREDIT",
+        amountMinor: intent.points,
+        reason: "Point top-up",
+        reference: creditRef,
+      });
+    }
+    const now = new Date();
+    const updated = await tx
+      .update(pointTopUpIntents)
+      .set({
+        status: "completed",
+        paymentReference: input.paymentReference,
+        completedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(pointTopUpIntents.id, intent.id))
+      .returning();
+    return updated[0];
+  });
+}
+
+export async function listUserTopUpIntents(userId: number, limit = 20) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  return db
+    .select()
+    .from(pointTopUpIntents)
+    .where(eq(pointTopUpIntents.userId, userId))
+    .orderBy(desc(pointTopUpIntents.createdAt))
+    .limit(Math.min(limit, 50));
 }

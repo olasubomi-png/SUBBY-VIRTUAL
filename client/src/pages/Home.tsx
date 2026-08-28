@@ -577,8 +577,8 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
                       );
                       return (
                       <option key={service.id} value={service.id}>
-                        {service.name} · ₦
-                        {quote?.amount ?? 0}
+                        {service.name} ·{" "}
+                        {(quote?.amount ?? 0).toLocaleString()} pts
                       </option>
                       );
                     })}
@@ -799,8 +799,10 @@ function Transactions() {
                         : "text-slate-300"
                     )}
                   >
-                    {entry.type === "CREDIT" ? "+" : "−"}₦
-                    {(entry.amountMinor / 100).toFixed(2)}
+                    {entry.type === "CREDIT" || entry.type === "REFUND"
+                      ? "+"
+                      : "−"}
+                    {(entry.points ?? entry.amountMinor).toLocaleString()} pts
                   </p>
                 </div>
               ))
@@ -1892,7 +1894,7 @@ function Wallet() {
               ))
             ) : (
               <p className="py-4 text-sm text-slate-500">
-                No transactions yet. Add demo credits to begin.
+                No transactions yet. Add demo points to begin.
               </p>
             )}
           </div>

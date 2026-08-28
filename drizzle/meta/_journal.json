@@ -78,6 +78,13 @@
       "when": 1787910000000,
       "tag": "0010_sms_price_snapshot",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787920000000,
+      "tag": "0011_subby_points_wallet",
+      "breakpoints": true
     }
   ]
 }

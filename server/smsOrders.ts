@@ -49,9 +49,15 @@ async function refundSmsAllocation(
 ) {
   const reference = `sms-refund-${userId}-${idempotencyKey}`;
   if (shouldUsePersistentStore()) {
-    const { creditPersistentWallet } = await import("./persistence");
-    await creditPersistentWallet(userId, amountMinor, reference);
+    const { creditRefundPoints } = await import("./persistence");
+    await creditRefundPoints(
+      userId,
+      amountMinor,
+      reference,
+      "SMS allocation refund"
+    );
   } else {
+    // Demo ledger uses CREDIT entries; reference keeps refunds idempotent
     addDemoCredits(userId, amountMinor, reference);
   }
 }

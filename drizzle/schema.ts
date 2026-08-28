@@ -96,15 +96,45 @@ export const walletLedgerEntries = pgTable(
   {
     id: serial("id").primaryKey(),
     walletId: integer("walletId").notNull(),
-    type: varchar("type", { length: 8 }).notNull(),
+    type: varchar("type", { length: 20 }).notNull(),
     amountMinor: bigint("amountMinor", { mode: "number" }).notNull(),
     reason: varchar("reason", { length: 120 }).notNull(),
     reference: varchar("reference", { length: 120 }).notNull().unique(),
+    direction: varchar("direction", { length: 8 }),
+    actorUserId: integer("actorUserId"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => ({
     walletCreated: index("ledger_wallet_created_idx").on(
       table.walletId,
+      table.createdAt
+    ),
+  })
+);
+export const pointTopUpIntents = pgTable(
+  "pointTopUpIntents",
+  {
+    id: serial("id").primaryKey(),
+    externalId: varchar("externalId", { length: 120 }).notNull(),
+    userId: integer("userId").notNull(),
+    points: bigint("points", { mode: "number" }).notNull(),
+    amountMinor: bigint("amountMinor", { mode: "number" }).notNull(),
+    currency: varchar("currency", { length: 3 }).notNull().default("NGN"),
+    status: varchar("status", { length: 16 }).notNull().default("pending"),
+    paymentReference: varchar("paymentReference", { length: 120 }),
+    idempotencyKey: varchar("idempotencyKey", { length: 120 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+    completedAt: timestamp("completedAt"),
+  },
+  table => ({
+    externalUid: uniqueIndex("point_topup_external_uidx").on(table.externalId),
+    userIdempotency: uniqueIndex("point_topup_user_idempotency_uidx").on(
+      table.userId,
+      table.idempotencyKey
+    ),
+    userCreated: index("point_topup_user_created_idx").on(
+      table.userId,
       table.createdAt
     ),
   })

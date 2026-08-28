@@ -39,6 +39,7 @@ import {
   getCatalogSnapshot,
   toPublicCatalog,
 } from "./smsCatalog";
+import { formatPoints, minorToPoints } from "./subbyPoints";
 import type { DemoActivation, DemoInbox } from "./demoState";
 import { createAuditEvent, type AuditEvent } from "./security";
 import { checkDistributedRateLimit } from "./redis";
@@ -97,6 +98,9 @@ import {
   listPersistentActivations,
   listPersistentInboxes,
   writeAuditLog,
+  adminAdjustPoints,
+  createPointTopUpIntent,
+  listUserTopUpIntents,
 } from "./persistence";
 function sanitizeUser(user: import("../drizzle/schema").User | null) {
   if (!user) return null;
@@ -274,12 +278,111 @@ export const appRouter = router({
       const wallet = shouldUsePersistentStore()
         ? await getPersistentWallet(ctx.user.id)
         : getDemoWallet(ctx.user.id);
+      const points = minorToPoints(wallet.balanceMinor);
       return {
+        /** @deprecated use points — retained for compatibility */
         balanceMinor: wallet.balanceMinor,
         creditsMinor: wallet.creditsMinor,
         spentMinor: wallet.spentMinor,
-        ledger: wallet.ledger,
+        points,
+        pointsLabel: formatPoints(points),
+        unit: "SUBBY Points",
+        ledger: (wallet.ledger as Array<Record<string, unknown>>).map(entry => ({
+          ...entry,
+          points: minorToPoints(Number(entry.amountMinor ?? 0)),
+        })),
       };
+    }),
+    walletTransactions: protectedProcedure
+      .input(
+        z
+          .object({
+            limit: z.number().int().min(1).max(100).default(50),
+            offset: z.number().int().min(0).max(10000).default(0),
+          })
+          .optional()
+      )
+      .query(async ({ ctx, input }) => {
+        const limit = input?.limit ?? 50;
+        const offset = input?.offset ?? 0;
+        if (shouldUsePersistentStore()) {
+          const rows = await listUserLedger(ctx.user.id, limit, offset);
+          return {
+            items: rows.map(row => ({
+              id: row.id,
+              type: row.type,
+              points: minorToPoints(row.amountMinor),
+              amountMinor: row.amountMinor,
+              reason: row.reason,
+              reference: row.reference,
+              createdAt: row.createdAt.toISOString(),
+            })),
+            limit,
+            offset,
+          };
+        }
+        const wallet = getDemoWallet(ctx.user.id);
+        const slice = wallet.ledger.slice(offset, offset + limit);
+        return {
+          items: slice.map(entry => ({
+            id: entry.id,
+            type: entry.type,
+            points: minorToPoints(entry.amountMinor),
+            amountMinor: entry.amountMinor,
+            reason: entry.reason,
+            reference: entry.reference,
+            createdAt: entry.createdAt,
+          })),
+          limit,
+          offset,
+        };
+      }),
+    createTopUpIntent: protectedProcedure
+      .input(
+        z.object({
+          points: z.number().int().positive().max(10_000_000),
+          idempotencyKey: z.string().uuid(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        // No payment provider yet — creates a pending intent only
+        if (shouldUsePersistentStore()) {
+          const intent = await createPointTopUpIntent({
+            userId: ctx.user.id,
+            points: input.points,
+            amountMinor: input.points, // 1:1 with points until payment gateway
+            currency: "NGN",
+            idempotencyKey: input.idempotencyKey,
+          });
+          return {
+            id: intent.externalId,
+            points: intent.points,
+            status: intent.status,
+            currency: intent.currency,
+            createdAt: intent.createdAt.toISOString(),
+          };
+        }
+        return {
+          id: `topup-demo-${ctx.user.id}-${input.idempotencyKey}`,
+          points: input.points,
+          status: "pending" as const,
+          currency: "NGN",
+          createdAt: new Date().toISOString(),
+        };
+      }),
+    topUpIntents: protectedProcedure.query(async ({ ctx }) => {
+      if (shouldUsePersistentStore()) {
+        const rows = await listUserTopUpIntents(ctx.user.id);
+        return rows.map(row => ({
+          id: row.externalId,
+          points: row.points,
+          status: row.status,
+          currency: row.currency,
+          createdAt: row.createdAt.toISOString(),
+          completedAt: row.completedAt?.toISOString(),
+        }));
+      }
+      return [];
     }),
     addDemoCredits: protectedProcedure
       .input(
@@ -733,6 +836,68 @@ export const appRouter = router({
         .input(z.object({ limit: z.number().int().min(1).max(25).default(10) }))
         .mutation(({ input }) => dispatchQueuedJobs(input.limit)),
     }),
+    adjustPoints: adminProcedure
+      .input(
+        z.object({
+          userId: z.number().int().positive(),
+          points: z.number().int().positive().max(10_000_000),
+          direction: z.enum(["credit", "debit"]),
+          reason: z.string().trim().min(3).max(120),
+          idempotencyKey: z.string().uuid(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (!shouldUsePersistentStore()) {
+          // Demo mode: use demo credits path for credit only
+          if (input.direction === "credit") {
+            const { addDemoCredits } = await import("./demoState");
+            const wallet = addDemoCredits(
+              input.userId,
+              input.points,
+              `admin-adj-${input.idempotencyKey}`
+            );
+            await writeAuditLog({
+              actorUserId: ctx.user.id,
+              action: "points.admin_adjustment",
+              targetType: "user",
+              targetId: String(input.userId),
+              metadata: {
+                direction: input.direction,
+                points: input.points,
+                reason: input.reason,
+              },
+            }).catch(() => undefined);
+            return {
+              points: minorToPoints(wallet.balanceMinor),
+              direction: input.direction,
+            };
+          }
+          throw new Error("Admin debit requires PostgreSQL wallet");
+        }
+        const wallet = await adminAdjustPoints({
+          userId: input.userId,
+          points: input.points,
+          direction: input.direction,
+          reason: input.reason,
+          reference: `admin-adj-${input.idempotencyKey}`,
+          actorUserId: ctx.user.id,
+        });
+        await writeAuditLog({
+          actorUserId: ctx.user.id,
+          action: "points.admin_adjustment",
+          targetType: "user",
+          targetId: String(input.userId),
+          metadata: {
+            direction: input.direction,
+            points: input.points,
+            reason: input.reason,
+          },
+        });
+        return {
+          points: minorToPoints(wallet.balanceMinor),
+          direction: input.direction,
+        };
+      }),
     databaseHealth: adminProcedure.query(() => getDatabaseHealth()),
     providerHealth: adminProcedure.query(async () => {
       const health = await providerRegistry.health();
