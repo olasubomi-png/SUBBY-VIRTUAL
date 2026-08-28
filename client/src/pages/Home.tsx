@@ -674,7 +674,6 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Button
                         variant="outline"
-                        className="mt-3 border-white/10 bg-transparent text-xs text-slate-300"
                         disabled={pollSms.isPending}
                         onClick={() => pollSms.mutate({ id: item.id })}
                         className="h-9 rounded-lg border border-white/10 px-3 text-xs text-slate-200"
