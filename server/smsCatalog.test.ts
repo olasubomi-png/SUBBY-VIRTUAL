@@ -76,6 +76,7 @@ describe("external live catalog", () => {
     return new ExternalSmsProvider(
       {
         mode: "external",
+        maxProviderCostNgn: null,
         baseUrl: "https://sms.example.com/api",
         apiKey: "key",
       },
@@ -148,6 +149,7 @@ describe("external live catalog", () => {
     const provider = new ExternalSmsProvider(
       {
         mode: "external",
+        maxProviderCostNgn: null,
         baseUrl: "https://sms.example.com/api",
         apiKey: "key",
       },
@@ -200,6 +202,7 @@ describe("purchase uses server-authoritative catalog price", () => {
     const provider = new ExternalSmsProvider(
       {
         mode: "external",
+        maxProviderCostNgn: null,
         baseUrl: "https://sms.example.com/api",
         apiKey: "key",
       },

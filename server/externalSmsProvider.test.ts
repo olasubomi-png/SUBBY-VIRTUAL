@@ -33,6 +33,7 @@ function providerWith(
   return new ExternalSmsProvider(
     {
       mode: "external",
+      maxProviderCostNgn: null,
       baseUrl: "https://sms.example.com/stubs/handler_api.php",
       apiKey: "test-secret-key",
     },
@@ -166,6 +167,7 @@ describe("ExternalSmsProvider HTTP adapter", () => {
     const provider = new ExternalSmsProvider(
       {
         mode: "external",
+        maxProviderCostNgn: null,
         baseUrl: "https://sms.example.com/api",
         apiKey: "key",
       },
@@ -227,5 +229,97 @@ describe("SmsProviderError safety", () => {
     );
     expect(error.message).not.toMatch(/api[_-]?key/i);
     expect(error.message).not.toContain("secret");
+  });
+});
+
+
+describe("ExternalSmsProvider HTTP error matrix", () => {
+  function providerWith(
+    handler: (url: string) => { status?: number; body: string }
+  ) {
+    return new ExternalSmsProvider(
+      {
+        mode: "external",
+        maxProviderCostNgn: null,
+        baseUrl: "https://sms.example.com/stubs/handler_api.php",
+        apiKey: "test-secret-key",
+      },
+      {
+        fetchImpl: async (input: string) => {
+          const result = handler(input);
+          return {
+            ok: (result.status ?? 200) >= 200 && (result.status ?? 200) < 300,
+            status: result.status ?? 200,
+            text: async () => result.body,
+          } as Response;
+        },
+        timeoutMs: 2000,
+      }
+    );
+  }
+
+  it("maps NO_BALANCE to PROVIDER_INSUFFICIENT_BALANCE", async () => {
+    await expect(
+      providerWith(() => ({ body: "NO_BALANCE" })).buyActivation({
+        userId: 1,
+        country: "NG",
+        serviceId: "whatsapp",
+      })
+    ).rejects.toMatchObject({ code: "PROVIDER_INSUFFICIENT_BALANCE" });
+  });
+
+  it("maps HTTP 403 to PROVIDER_AUTH", async () => {
+    await expect(
+      providerWith(() => ({ status: 403, body: "forbidden" })).buyActivation({
+        userId: 1,
+        country: "NG",
+        serviceId: "whatsapp",
+      })
+    ).rejects.toMatchObject({ code: "PROVIDER_AUTH" });
+  });
+
+  it("maps HTTP 429 to PROVIDER_RATE_LIMITED", async () => {
+    await expect(
+      providerWith(() => ({ status: 429, body: "slow down" })).buyActivation({
+        userId: 1,
+        country: "NG",
+        serviceId: "whatsapp",
+      })
+    ).rejects.toMatchObject({ code: "PROVIDER_RATE_LIMITED" });
+  });
+
+  it("parses STATUS_WAIT_CODE as waiting", async () => {
+    const status = await providerWith(() => ({
+      body: "STATUS_WAIT_CODE",
+    })).getStatus("123");
+    expect(status.status).toBe("WAITING");
+  });
+
+  it("parses STATUS_CANCEL", async () => {
+    const status = await providerWith(() => ({
+      body: "STATUS_CANCEL",
+    })).getStatus("123");
+    expect(status.status).toBe("CANCELLED");
+  });
+
+  it("rejects malformed balance responses in healthCheck", async () => {
+    const health = await providerWith(() => ({
+      body: "ACCESS_BALANCE:not-a-number",
+    })).healthCheck();
+    expect(health.ok).toBe(false);
+  });
+
+  it("never includes api key in error messages", async () => {
+    try {
+      await providerWith(() => ({ body: "BAD_KEY" })).buyActivation({
+        userId: 1,
+        country: "NG",
+        serviceId: "whatsapp",
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      expect(msg).not.toContain("test-secret-key");
+      expect(msg.toLowerCase()).not.toMatch(/sk_live|api_key=/);
+    }
   });
 });

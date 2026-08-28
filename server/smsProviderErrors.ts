@@ -9,6 +9,8 @@ export const SMS_PROVIDER_ERROR_CODES = [
   "PROVIDER_AUTH",
   "PROVIDER_REJECTED",
   "PROVIDER_NO_NUMBERS",
+  "PROVIDER_INSUFFICIENT_BALANCE",
+  "PROVIDER_COST_EXCEEDED",
   "PROVIDER_MALFORMED",
   "PROVIDER_NOT_IMPLEMENTED",
   "PROVIDER_CANCEL_FAILED",
@@ -44,6 +46,10 @@ export function safeSmsProviderClientMessage(error: unknown): string {
         return "No numbers available for this service and country";
       case "PROVIDER_AUTH":
         return "SMS provider authentication failed";
+      case "PROVIDER_INSUFFICIENT_BALANCE":
+        return "SMS provider account has insufficient balance";
+      case "PROVIDER_COST_EXCEEDED":
+        return "Provider cost exceeds the configured maximum";
       case "PROVIDER_TIMEOUT":
       case "PROVIDER_UNAVAILABLE":
         return "SMS provider is temporarily unavailable";

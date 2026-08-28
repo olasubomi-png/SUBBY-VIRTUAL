@@ -18,6 +18,7 @@ SMS_PROVIDER=mock|external
 SMS_PROVIDER_BASE_URL=https://api.example.com/stubs/handler_api.php
 SMS_PROVIDER_API_KEY=your-provider-api-key
 SMS_PROVIDER_API_SECRET=   # optional / unused by the SMS-Activate adapter
+SMS_MAX_PROVIDER_COST_NGN=  # optional NGN major ceiling for upstream cost
 ```
 
 Placeholders only — never commit real credentials.
@@ -139,3 +140,32 @@ SMS_PROVIDER_API_KEY=your_key_here
 | `SMS_PROVIDER_API_KEY` | Server-side API key |
 
 Optional: `SMS_PROVIDER_API_SECRET` (unused by SMS-Activate adapter).
+
+
+## Maximum provider-cost protection
+
+`SMS_MAX_PROVIDER_COST_NGN` is an optional integer ceiling in **NGN major units**.
+
+- Customer charge remains **1 Point = ₦500** regardless of upstream cost.
+- Before calling `getNumber`, the server compares catalog `providerCostMinor` (kobo) to `SMS_MAX_PROVIDER_COST_NGN × 100`.
+- If the ceiling is set and provider cost is **unknown**, allocation fails closed (does not invent a price).
+- If cost exceeds the ceiling → `PROVIDER_COST_EXCEEDED` (non-retryable for that quote).
+
+## Handler protocol (SMS-Activate-compatible)
+
+| Action | Success shape | Notes |
+|--------|---------------|-------|
+| `getBalance` | `ACCESS_BALANCE:<amount>` | Health + balance |
+| `getPrices` | JSON country→service cost/count | Live catalog |
+| `getNumber` | `ACCESS_NUMBER:<id>:<phone>` | Allocation |
+| `getStatus` | `STATUS_WAIT_CODE` / `STATUS_OK:<code>` / `STATUS_CANCEL` | OTP poll |
+| `setStatus` | `ACCESS_*` | status=8 cancel, status=6 complete |
+
+## Safe production deployment
+
+1. Keep `SMS_PROVIDER=mock` until keys are ready.
+2. Set `SMS_PROVIDER_BASE_URL` and `SMS_PROVIDER_API_KEY` on the VPS only.
+3. Optionally set `SMS_MAX_PROVIDER_COST_NGN` (e.g. `400`).
+4. Switch `SMS_PROVIDER=external`.
+5. Restart the process; verify admin provider health.
+6. Never commit real API keys.

@@ -162,7 +162,7 @@ export class ExternalSmsProvider implements SMSProvider {
     }
     if (upper.includes("NO_BALANCE") || upper.includes("NOT_ENOUGH_MONEY")) {
       throw new SmsProviderError(
-        "PROVIDER_REJECTED",
+        "PROVIDER_INSUFFICIENT_BALANCE",
         "Provider account has insufficient balance",
         { retryable: false }
       );

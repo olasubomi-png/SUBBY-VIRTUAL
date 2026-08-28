@@ -12,6 +12,7 @@ import {
   POINTS_PRICING_VERSION,
   SMS_ACTIVATION_POINTS,
 } from "./subbyPoints";
+import { assertProviderCostAllowed } from "./smsProviderCostGuard";
 import {
   assertSmsOrderTransition,
   isTerminalSmsOrderStatus,
@@ -155,6 +156,7 @@ async function createDemoOrder(input: CreateSmsOrderInput): Promise<{
 
   try {
     order = transitionDemoOrder(order.id, input.userId, "allocating");
+    assertProviderCostAllowed(priceQuote.providerCostMinor);
     const providerResult = await input.provider.buyActivation({
       userId: input.userId,
       country: input.country,
@@ -307,6 +309,7 @@ async function createPersistentOrder(input: CreateSmsOrderInput): Promise<{
       externalId: created.order.id,
       to: "allocating",
     });
+    assertProviderCostAllowed(priceQuote.providerCostMinor);
     const providerResult = await input.provider.buyActivation({
       userId: input.userId,
       country: input.country,

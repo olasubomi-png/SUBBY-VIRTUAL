@@ -21,7 +21,7 @@ afterEach(() => {
 describe("SMS provider configuration resolution", () => {
   it("defaults to mock when SMS_PROVIDER is unset", () => {
     const config = resolveSmsProviderConfig({});
-    expect(config).toEqual({ mode: "mock" });
+    expect(config).toEqual({ mode: "mock", maxProviderCostNgn: null });
     expect(isMockSmsProviderConfig(config)).toBe(true);
   });
 
@@ -80,6 +80,7 @@ describe("SMS provider configuration resolution", () => {
       baseUrl: "https://sms.example.com/v1",
       apiKey: "test-key",
       apiSecret: "test-secret",
+      maxProviderCostNgn: null,
     });
     expect(isMockSmsProviderConfig(config)).toBe(false);
   });
@@ -98,8 +99,9 @@ describe("SMS provider configuration resolution", () => {
       mode: "external",
       baseUrl: "https://sms.example.com",
       apiKey: "super-secret",
+      maxProviderCostNgn: null,
     });
-    expect(summary).toEqual({ mode: "external", configured: true });
+    expect(summary).toEqual({ mode: "external", configured: true, maxProviderCostNgn: null });
     expect(JSON.stringify(summary)).not.toContain("super-secret");
   });
 });
@@ -180,6 +182,7 @@ describe("SMS provider registry selection", () => {
           mode: "external",
           baseUrl: "",
           apiKey: "",
+          maxProviderCostNgn: null,
         })
     ).toThrow(/cannot initialize without complete configuration/);
   });
@@ -275,5 +278,19 @@ describe("provider type consistency with resolved configuration", () => {
     const a = getConfiguredSmsProvider(env);
     const b = getConfiguredSmsProvider(env);
     expect(a).toBe(b);
+  });
+});
+
+
+describe("SMS_MAX_PROVIDER_COST_NGN", () => {
+  it("parses null by default and integer ceilings", () => {
+    expect(resolveSmsProviderConfig({}).maxProviderCostNgn).toBeNull();
+    expect(
+      resolveSmsProviderConfig({ SMS_MAX_PROVIDER_COST_NGN: "400" })
+        .maxProviderCostNgn
+    ).toBe(400);
+    expect(() =>
+      resolveSmsProviderConfig({ SMS_MAX_PROVIDER_COST_NGN: "-1" })
+    ).toThrow(/SMS_MAX_PROVIDER_COST_NGN/);
   });
 });

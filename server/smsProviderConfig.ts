@@ -10,18 +10,46 @@ export const SMS_PROVIDER_MODES = ["mock", "external"] as const;
 export type SmsProviderMode = (typeof SMS_PROVIDER_MODES)[number];
 
 export type SmsProviderConfig =
-  | { mode: "mock" }
+  | { mode: "mock"; maxProviderCostNgn: number | null }
   | {
       mode: "external";
       baseUrl: string;
       apiKey: string;
       /** Optional secondary secret if a future adapter needs it. */
       apiSecret?: string;
+      /**
+       * Maximum allowed upstream provider cost in NGN major units (integer).
+       * null = no ceiling configured (purchase still requires known provider cost in external mode when available).
+       */
+      maxProviderCostNgn: number | null;
     };
 
 export type RuntimeEnv = Record<string, string | undefined>;
 
 const DEFAULT_MODE: SmsProviderMode = "mock";
+
+/** Parse SMS_MAX_PROVIDER_COST_NGN (integer NGN major). Empty = null (no ceiling). */
+export function parseMaxProviderCostNgn(
+  raw: string | undefined
+): number | null {
+  if (raw === undefined || raw.trim() === "") return null;
+  const n = Number(raw.trim());
+  if (!Number.isInteger(n) || n < 0 || n > 1_000_000) {
+    throw new Error(
+      "SMS_MAX_PROVIDER_COST_NGN must be an integer NGN amount between 0 and 1000000"
+    );
+  }
+  return n;
+}
+
+/** Convert NGN major ceiling to kobo (minor units) for comparison with providerCostMinor. */
+export function maxProviderCostNgnToMinor(maxNgn: number): number {
+  if (!Number.isInteger(maxNgn) || maxNgn < 0) {
+    throw new Error("Invalid max provider cost");
+  }
+  return maxNgn * 100;
+}
+
 
 function readMode(env: RuntimeEnv): SmsProviderMode {
   const raw = (env.SMS_PROVIDER ?? DEFAULT_MODE).trim().toLowerCase();
@@ -44,7 +72,10 @@ export function resolveSmsProviderConfig(
   const mode = readMode(env);
 
   if (mode === "mock") {
-    return { mode: "mock" };
+    return {
+      mode: "mock",
+      maxProviderCostNgn: parseMaxProviderCostNgn(env.SMS_MAX_PROVIDER_COST_NGN),
+    };
   }
 
   // mode === "external" — all required fields must be present; no silent fallback
@@ -77,6 +108,7 @@ export function resolveSmsProviderConfig(
 
   return {
     mode: "external",
+    maxProviderCostNgn: parseMaxProviderCostNgn(env.SMS_MAX_PROVIDER_COST_NGN),
     baseUrl: baseUrl.replace(/\/+$/, ""),
     apiKey,
     apiSecret,
@@ -86,7 +118,7 @@ export function resolveSmsProviderConfig(
 /** True when the resolved config selects the mock provider. */
 export function isMockSmsProviderConfig(
   config: SmsProviderConfig
-): config is { mode: "mock" } {
+): config is Extract<SmsProviderConfig, { mode: "mock" }> {
   return config.mode === "mock";
 }
 
@@ -96,13 +128,19 @@ export function isMockSmsProviderConfig(
 export function describeSmsProviderConfig(config: SmsProviderConfig): {
   mode: SmsProviderMode;
   configured: boolean;
+  maxProviderCostNgn: number | null;
 } {
   if (config.mode === "mock") {
-    return { mode: "mock", configured: true };
+    return {
+      mode: "mock",
+      configured: true,
+      maxProviderCostNgn: config.maxProviderCostNgn,
+    };
   }
   return {
     mode: "external",
     configured: Boolean(config.baseUrl && config.apiKey),
+    maxProviderCostNgn: config.maxProviderCostNgn,
   };
 }
 
