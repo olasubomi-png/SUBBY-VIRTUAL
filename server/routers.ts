@@ -40,6 +40,12 @@ import {
   toPublicCatalog,
 } from "./smsCatalog";
 import { formatPoints, minorToPoints } from "./subbyPoints";
+import {
+  getTopUpStatusForUser,
+  initializePointTopUp,
+  listSafePointPackages,
+} from "./payments";
+import { paymentProviderRegistry } from "./paymentProviders";
 import type { DemoActivation, DemoInbox } from "./demoState";
 import { createAuditEvent, type AuditEvent } from "./security";
 import { checkDistributedRateLimit } from "./redis";
@@ -337,38 +343,43 @@ export const appRouter = router({
           offset,
         };
       }),
-    createTopUpIntent: protectedProcedure
+    pointPackages: protectedProcedure.query(() => listSafePointPackages()),
+    initializeTopUp: protectedProcedure
       .input(
         z.object({
-          points: z.number().int().positive().max(10_000_000),
+          packageId: z.string().min(1).max(64),
           idempotencyKey: z.string().uuid(),
         })
       )
       .mutation(async ({ ctx, input }) => {
-        // No payment provider yet — creates a pending intent only
-        if (shouldUsePersistentStore()) {
-          const intent = await createPointTopUpIntent({
+        const email =
+          (ctx.user as { email?: string | null }).email?.trim() ||
+          `user${ctx.user.id}@subby.local`;
+        try {
+          return await initializePointTopUp({
             userId: ctx.user.id,
-            points: input.points,
-            amountMinor: input.points, // 1:1 with points until payment gateway
-            currency: "NGN",
+            email,
+            packageId: input.packageId,
             idempotencyKey: input.idempotencyKey,
           });
-          return {
-            id: intent.externalId,
-            points: intent.points,
-            status: intent.status,
-            currency: intent.currency,
-            createdAt: intent.createdAt.toISOString(),
-          };
+        } catch (error) {
+          if (error instanceof Error && error.message === "Unknown points package") {
+            throw error;
+          }
+          throw new Error("Unable to initialize top-up");
         }
-        return {
-          id: `topup-demo-${ctx.user.id}-${input.idempotencyKey}`,
-          points: input.points,
-          status: "pending" as const,
-          currency: "NGN",
-          createdAt: new Date().toISOString(),
-        };
+      }),
+    topUpStatus: protectedProcedure
+      .input(z.object({ topUpId: z.string().min(1).max(160) }))
+      .query(async ({ ctx, input }) => {
+        try {
+          return await getTopUpStatusForUser({
+            userId: ctx.user.id,
+            topUpId: input.topUpId,
+          });
+        } catch {
+          throw new Error("Top-up not found");
+        }
       }),
     topUpIntents: protectedProcedure.query(async ({ ctx }) => {
       if (shouldUsePersistentStore()) {
@@ -378,6 +389,7 @@ export const appRouter = router({
           points: row.points,
           status: row.status,
           currency: row.currency,
+          amountMinor: row.amountMinor,
           createdAt: row.createdAt.toISOString(),
           completedAt: row.completedAt?.toISOString(),
         }));
@@ -898,6 +910,7 @@ export const appRouter = router({
           direction: input.direction,
         };
       }),
+    paymentHealth: adminProcedure.query(async () => paymentProviderRegistry.health()),
     databaseHealth: adminProcedure.query(() => getDatabaseHealth()),
     providerHealth: adminProcedure.query(async () => {
       const health = await providerRegistry.health();

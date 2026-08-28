@@ -1790,6 +1790,9 @@ export async function createPointTopUpIntent(input: {
   amountMinor: number;
   currency?: "NGN" | "USD";
   idempotencyKey: string;
+  packageId?: string;
+  paymentReference?: string;
+  provider?: string;
 }) {
   if (!Number.isSafeInteger(input.points) || input.points <= 0) {
     throw new Error("Points must be a positive integer");
@@ -1821,10 +1824,112 @@ export async function createPointTopUpIntent(input: {
       currency: input.currency ?? "NGN",
       status: "pending",
       idempotencyKey: input.idempotencyKey,
+      packageId: input.packageId,
+      paymentReference: input.paymentReference,
+      provider: input.provider,
     })
     .returning();
   return inserted[0];
 }
+
+export async function getPointTopUpByExternalId(
+  userId: number,
+  externalId: string
+) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const rows = await db
+    .select()
+    .from(pointTopUpIntents)
+    .where(
+      and(
+        eq(pointTopUpIntents.userId, userId),
+        eq(pointTopUpIntents.externalId, externalId)
+      )
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function getPointTopUpByPaymentReference(paymentReference: string) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  const rows = await db
+    .select()
+    .from(pointTopUpIntents)
+    .where(eq(pointTopUpIntents.paymentReference, paymentReference))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** Atomically complete top-up and credit points once (ledger reference unique). */
+export async function completeVerifiedPointTopUp(input: {
+  userId: number;
+  externalId: string;
+  paymentReference: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_URL is not configured");
+  return db.transaction(async tx => {
+    const rows = await tx
+      .select()
+      .from(pointTopUpIntents)
+      .where(
+        and(
+          eq(pointTopUpIntents.userId, input.userId),
+          eq(pointTopUpIntents.externalId, input.externalId)
+        )
+      )
+      .limit(1);
+    const intent = rows[0];
+    if (!intent) throw new Error("Top-up intent not found");
+    if (intent.status === "completed") return intent;
+    if (intent.status !== "pending" && intent.status !== "processing") {
+      throw new Error("Top-up intent cannot be completed");
+    }
+    const creditRef = `topup-credit-${intent.externalId}`;
+    const walletRows = await tx
+      .select()
+      .from(wallets)
+      .where(and(eq(wallets.userId, input.userId), eq(wallets.currency, "NGN")))
+      .limit(1);
+    let wallet = walletRows[0];
+    if (!wallet) {
+      const created = await tx
+        .insert(wallets)
+        .values({ userId: input.userId, currency: "NGN" })
+        .returning();
+      wallet = created[0];
+    }
+    const dup = await tx
+      .select()
+      .from(walletLedgerEntries)
+      .where(eq(walletLedgerEntries.reference, creditRef))
+      .limit(1);
+    if (!dup[0]) {
+      await tx.insert(walletLedgerEntries).values({
+        walletId: wallet.id,
+        type: "CREDIT",
+        amountMinor: intent.points,
+        reason: "Point top-up",
+        reference: creditRef,
+      });
+    }
+    const now = new Date();
+    const updated = await tx
+      .update(pointTopUpIntents)
+      .set({
+        status: "completed",
+        paymentReference: input.paymentReference,
+        completedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(pointTopUpIntents.id, intent.id))
+      .returning();
+    return updated[0];
+  });
+}
+
 
 /** Test/fixture only — completes a top-up and credits points once. */
 export async function completePointTopUpFixture(input: {

@@ -122,6 +122,8 @@ export const pointTopUpIntents = pgTable(
     currency: varchar("currency", { length: 3 }).notNull().default("NGN"),
     status: varchar("status", { length: 16 }).notNull().default("pending"),
     paymentReference: varchar("paymentReference", { length: 120 }),
+    packageId: varchar("packageId", { length: 64 }),
+    provider: varchar("provider", { length: 16 }),
     idempotencyKey: varchar("idempotencyKey", { length: 120 }).notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
@@ -136,6 +138,9 @@ export const pointTopUpIntents = pgTable(
     userCreated: index("point_topup_user_created_idx").on(
       table.userId,
       table.createdAt
+    ),
+    paymentRefUid: uniqueIndex("point_topup_payment_ref_uidx").on(
+      table.paymentReference
     ),
   })
 );

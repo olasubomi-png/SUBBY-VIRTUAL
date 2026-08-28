@@ -31,7 +31,7 @@ describe("PostgreSQL migration contract", () => {
     expect(journal.entries.map(entry => entry.idx)).toEqual(
       journal.entries.map((_, index) => index)
     );
-    expect(journal.entries.at(-1)?.tag).toBe("0011_subby_points_wallet");
+    expect(journal.entries.at(-1)?.tag).toBe("0012_paystack_topups");
   });
 
   it("matches message columns and uses additive unique constraints", () => {

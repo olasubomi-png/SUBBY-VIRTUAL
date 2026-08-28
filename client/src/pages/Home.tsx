@@ -30,7 +30,7 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 
@@ -1817,85 +1817,198 @@ function Admin() {
 
 function Wallet() {
   const wallet = trpc.workspace.wallet.useQuery();
+  const packages = trpc.workspace.pointPackages.useQuery();
   const addCredits = trpc.workspace.addDemoCredits.useMutation({
     onSuccess: () => wallet.refetch(),
   });
-  const amountMinor = 8000;
+  const initializeTopUp = trpc.workspace.initializeTopUp.useMutation();
+  const [selectedPackage, setSelectedPackage] = useState("pts_5k");
+  const [pendingTopUpId, setPendingTopUpId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return sessionStorage.getItem("subby_pending_topup");
+  });
+  const [paymentNotice, setPaymentNotice] = useState<string | null>(null);
+  const topUpStatus = trpc.workspace.topUpStatus.useQuery(
+    { topUpId: pendingTopUpId ?? "" },
+    {
+      enabled: Boolean(pendingTopUpId),
+      refetchInterval: pendingTopUpId ? 3000 : false,
+    }
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("payment") === "return" || params.get("payment") === "mock") {
+      const ref = params.get("reference");
+      const stored = sessionStorage.getItem("subby_pending_topup");
+      if (stored) setPendingTopUpId(stored);
+      setPaymentNotice(
+        ref
+          ? "Checking payment status with the server…"
+          : "Returning from checkout — verifying payment…"
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!topUpStatus.data) return;
+    if (topUpStatus.data.status === "completed") {
+      setPaymentNotice(
+        `Payment verified. ${topUpStatus.data.points.toLocaleString()} Points credited.`
+      );
+      sessionStorage.removeItem("subby_pending_topup");
+      wallet.refetch();
+    } else if (
+      topUpStatus.data.status === "failed" ||
+      topUpStatus.data.status === "cancelled"
+    ) {
+      setPaymentNotice("Payment was not completed. No Points were credited.");
+    } else {
+      setPaymentNotice("Payment is still pending verification…");
+    }
+  }, [topUpStatus.data, wallet]);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div>
         <p className="mb-2 text-sm text-slate-500">Workspace / Wallet</p>
         <h1 className="text-3xl font-semibold text-white">Wallet</h1>
         <p className="mt-2 text-sm text-slate-400">
-          Server-authoritative Demo Credits with an auditable ledger.
+          SUBBY Points balance with an auditable ledger. Payments are verified
+          server-side.
         </p>
       </div>
       <Card className="border-cyan-300/20 bg-gradient-to-br from-cyan-400/10 to-[#10131c] shadow-none">
         <CardContent className="p-6">
-          <p className="text-xs text-cyan-200/70">NGN available demo balance</p>
+          <p className="text-xs text-cyan-200/70">SUBBY Points balance</p>
           <p className="mt-2 text-4xl font-semibold tracking-tight text-white">
-            ₦{((wallet.data?.balanceMinor ?? 0) / 100).toFixed(2)}
+            {(wallet.data?.points ?? wallet.data?.balanceMinor ?? 0).toLocaleString()}
           </p>
-          <div className="mt-4 flex flex-wrap gap-3 text-xs text-slate-400">
-            <span>
-              Credits added: ₦
-              {((wallet.data?.creditsMinor ?? 0) / 100).toFixed(2)}
-            </span>
-            <span>
-              Spent: ₦{((wallet.data?.spentMinor ?? 0) / 100).toFixed(2)}
-            </span>
+          <p className="mt-2 text-sm text-slate-400">
+            Available for SMS activations and workspace services.
+          </p>
+          {paymentNotice && (
+            <p className="mt-4 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-cyan-100">
+              {paymentNotice}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+        <CardHeader>
+          <CardTitle className="text-base text-white">Buy Points</CardTitle>
+          <p className="mt-1 text-xs text-slate-500">
+            Choose a package. Amount and Points are set by the server.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-2 sm:grid-cols-2">
+            {(packages.data ?? []).map(pkg => (
+              <button
+                key={pkg.id}
+                type="button"
+                onClick={() => setSelectedPackage(pkg.id)}
+                className={cn(
+                  "rounded-lg border px-4 py-3 text-left transition",
+                  selectedPackage === pkg.id
+                    ? "border-cyan-300/50 bg-cyan-400/10"
+                    : "border-white/10 bg-[#0a0c12] hover:border-white/20"
+                )}
+              >
+                <p className="text-sm font-medium text-white">{pkg.label}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  ₦{(pkg.amountMinor / 100).toFixed(2)}
+                </p>
+              </button>
+            ))}
           </div>
           <Button
+            disabled={initializeTopUp.isPending || !selectedPackage}
+            onClick={async () => {
+              const result = await initializeTopUp.mutateAsync({
+                packageId: selectedPackage,
+                idempotencyKey: crypto.randomUUID(),
+              });
+              sessionStorage.setItem("subby_pending_topup", result.topUpId);
+              setPendingTopUpId(result.topUpId);
+              if (result.authorizationUrl) {
+                window.location.href = result.authorizationUrl;
+              }
+            }}
+            className="h-11 w-full rounded-lg bg-cyan-300 font-semibold text-slate-950 hover:bg-cyan-200"
+          >
+            {initializeTopUp.isPending ? "Starting checkout…" : "Pay securely"}
+          </Button>
+          <Button
+            variant="outline"
             disabled={addCredits.isPending}
             onClick={() =>
-              addCredits.mutate({ amountMinor, requestId: crypto.randomUUID() })
+              addCredits.mutate({
+                amountMinor: 8000,
+                requestId: crypto.randomUUID(),
+              })
             }
-            className="mt-6 rounded-lg bg-cyan-300 text-xs font-semibold text-slate-950 hover:bg-cyan-200"
+            className="h-10 w-full rounded-lg border-white/10 text-slate-300"
           >
-            <Plus className="mr-2 h-3.5 w-3.5" /> Add ₦80.00 demo credits
+            Add demo points (dev)
           </Button>
         </CardContent>
       </Card>
+
       <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
         <CardHeader>
-          <CardTitle className="text-base text-white">
-            Ledger activity
-          </CardTitle>
+          <CardTitle className="text-base text-white">Ledger</CardTitle>
           <p className="mt-1 text-xs text-slate-500">
-            Every demo credit and request debit is server-recorded.
+            Immutable credits, debits, and refunds.
           </p>
         </CardHeader>
         <CardContent>
           <div className="divide-y divide-white/[0.06]">
-            {wallet.data?.ledger.length ? (
-              wallet.data.ledger.map(item => (
-                <div key={item.id} className="flex items-center gap-4 py-4">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-200">
-                      {item.description}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {item.referenceId} ·{" "}
-                      {new Date(item.createdAt).toLocaleString()}
+            {(wallet.data?.ledger ?? []).length > 0 ? (
+              (wallet.data?.ledger ?? []).map(
+                (entry: {
+                  id: string;
+                  type: string;
+                  amountMinor: number;
+                  points?: number;
+                  description?: string;
+                  reason?: string;
+                  referenceId?: string;
+                  reference?: string;
+                  createdAt: string;
+                }) => (
+                  <div
+                    key={entry.id}
+                    className="flex flex-wrap items-center gap-3 py-4"
+                  >
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-slate-200">
+                        {entry.description ?? entry.reason ?? entry.type}
+                      </p>
+                      <p className="mt-1 font-mono text-[11px] text-slate-600">
+                        {entry.referenceId ?? entry.reference}
+                      </p>
+                    </div>
+                    <p
+                      className={cn(
+                        "w-full text-right text-sm font-semibold sm:w-auto",
+                        entry.type === "CREDIT" || entry.type === "REFUND"
+                          ? "text-emerald-300"
+                          : "text-slate-300"
+                      )}
+                    >
+                      {entry.type === "CREDIT" || entry.type === "REFUND"
+                        ? "+"
+                        : "−"}
+                      {(entry.points ?? entry.amountMinor).toLocaleString()} pts
                     </p>
                   </div>
-                  <p
-                    className={cn(
-                      "text-sm font-semibold",
-                      item.type === "CREDIT"
-                        ? "text-emerald-300"
-                        : "text-slate-300"
-                    )}
-                  >
-                    {item.type === "CREDIT" ? "+" : "−"}₦
-                    {(item.amountMinor / 100).toFixed(2)}
-                  </p>
-                </div>
-              ))
+                )
+              )
             ) : (
-              <p className="py-4 text-sm text-slate-500">
-                No transactions yet. Add demo points to begin.
-              </p>
+              <p className="py-4 text-sm text-slate-500">No transactions yet.</p>
             )}
           </div>
         </CardContent>
@@ -1903,6 +2016,7 @@ function Wallet() {
     </div>
   );
 }
+
 
 function LegacyWallet() {
   return (
