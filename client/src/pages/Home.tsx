@@ -3,6 +3,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/_core/hooks/useAuth";
+import {
+  formatDashboardDate,
+  getTimeOfDayGreeting,
+  getUsableDisplayName,
+} from "@shared/greeting";
 import { cn } from "@/lib/utils";
 import {
   ArrowUpRight,
@@ -159,20 +164,31 @@ function StatusPill({ status }: { status: string }) {
 }
 
 function Overview({ setActive }: { setActive: (id: string) => void }) {
+  const { user } = useAuth();
   const summary = trpc.workspace.summary.useQuery();
   const requests = trpc.workspace.smsRequests.useQuery();
   const balance = summary.data?.balance.NGN ?? 0;
+  const now = new Date();
+  const timeGreeting = getTimeOfDayGreeting(now);
+  const displayName = getUsableDisplayName(user?.name);
+  const dateLabel = formatDashboardDate(now);
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
-          <p className="mb-2 text-sm text-slate-500">Tuesday, 26 August 2026</p>
+          <p className="mb-2 text-sm text-slate-500">{dateLabel}</p>
           <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">
-            Good morning, <span className="text-cyan-300">Olasubomi.</span>
+            {displayName ? (
+              <>
+                {timeGreeting},{" "}
+                <span className="text-cyan-300">{displayName}.</span>
+              </>
+            ) : (
+              <>{timeGreeting}.</>
+            )}
           </h1>
           <p className="mt-2 max-w-xl text-sm text-slate-400">
-            Your communications workspace is clear and ready for the next
-            request.
+            Here's what's happening in your communications workspace today.
           </p>
         </div>
         <Button
