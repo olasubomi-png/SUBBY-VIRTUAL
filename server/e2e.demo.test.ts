@@ -34,7 +34,7 @@ describe("Step 2 end-to-end demo flow", () => {
       idempotencyKey: "00000000-0000-4000-8000-000000000001",
     });
     expect(activation.status).toBe("active");
-    expect(activation.walletBalanceMinor).toBe(85000);
+    expect(activation.walletBalanceMinor).toBe(99999);
     const smsJob = await caller.workspace.simulateSms({ id: activation.id });
     expect(smsJob.status).toBe("QUEUED");
     await dispatchQueuedJobs();
@@ -53,9 +53,9 @@ describe("Step 2 end-to-end demo flow", () => {
     const received = await caller.workspace.mailInboxDetail({ id: inbox.id });
     expect(received.messages).toHaveLength(1);
     const wallet = await caller.workspace.wallet();
-    expect(wallet.balanceMinor).toBe(85000);
+    expect(wallet.balanceMinor).toBe(99999);
     const summary = await caller.workspace.summary();
-    expect(summary.balance.NGN).toBe(85000);
+    expect(summary.balance.NGN).toBe(99999);
     expect(wallet.ledger.map(entry => entry.type)).toEqual(["DEBIT", "CREDIT"]);
   });
 

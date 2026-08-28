@@ -9,6 +9,10 @@ import { providerStatusToCanonicalTarget } from "./smsProviderMapping";
 import { resolvePriceQuote } from "./smsCatalog";
 import { parseMarkupBps } from "./smsPricing";
 import {
+  POINTS_PRICING_VERSION,
+  SMS_ACTIVATION_POINTS,
+} from "./subbyPoints";
+import {
   assertSmsOrderTransition,
   isTerminalSmsOrderStatus,
   normalizeSmsOrderStatus,
@@ -101,14 +105,15 @@ async function createDemoOrder(input: CreateSmsOrderInput): Promise<{
   walletBalanceMinor: number;
   reused: boolean;
 }> {
+  // Validate country/service availability against active provider catalog
   const priceQuote = await resolvePriceQuote(
     input.provider,
     input.country,
     input.serviceId
   );
-  if (priceQuote.currency !== "NGN" && priceQuote.currency !== "USD") {
-    throw new Error("Invalid currency");
-  }
+  // User-facing charge is always 1 Point per activation (server-authoritative)
+  const chargePoints = SMS_ACTIVATION_POINTS;
+  const currency = "NGN" as const;
 
   const existing = listDemoActivations(input.userId).find(
     a => a.idempotencyKey === input.idempotencyKey
@@ -122,14 +127,14 @@ async function createDemoOrder(input: CreateSmsOrderInput): Promise<{
   }
 
   const wallet = getDemoWallet(input.userId);
-  if (wallet.balanceMinor < priceQuote.retailPriceMinor) {
+  if (wallet.balanceMinor < chargePoints) {
     throw new Error("Insufficient balance");
   }
 
   const debitRef = `sms-order-${input.userId}-${input.idempotencyKey}`;
   debitDemoCredits(
     input.userId,
-    priceQuote.retailPriceMinor,
+    chargePoints,
     `${priceQuote.serviceId} SMS activation`,
     debitRef
   );
@@ -138,15 +143,15 @@ async function createDemoOrder(input: CreateSmsOrderInput): Promise<{
     userId: input.userId,
     country: input.country,
     serviceId: input.serviceId,
-    priceMinor: priceQuote.retailPriceMinor,
-    currency: priceQuote.currency,
+    priceMinor: chargePoints,
+    currency,
     idempotencyKey: input.idempotencyKey,
     status: "pending",
   });
   (order as { providerCostMinor?: number }).providerCostMinor =
     priceQuote.providerCostMinor;
   (order as { pricingVersion?: string }).pricingVersion =
-    priceQuote.pricingVersion;
+    POINTS_PRICING_VERSION;
 
   try {
     order = transitionDemoOrder(order.id, input.userId, "allocating");
@@ -168,7 +173,7 @@ async function createDemoOrder(input: CreateSmsOrderInput): Promise<{
     try {
       await refundSmsAllocation(
         input.userId,
-        priceQuote.retailPriceMinor,
+        chargePoints,
         input.idempotencyKey
       );
     } catch {
@@ -249,11 +254,11 @@ async function createPersistentOrder(input: CreateSmsOrderInput): Promise<{
     providerType: input.providerType ?? "MOCK",
     countryCode: input.country,
     serviceId: input.serviceId,
-    quotedPriceMinor: priceQuote.retailPriceMinor,
+    quotedPriceMinor: SMS_ACTIVATION_POINTS,
     providerCostMinor: priceQuote.providerCostMinor,
-    pricingVersion: priceQuote.pricingVersion,
-    markupBps: parseMarkupBps(process.env.SMS_MARKUP_BPS),
-    currency: priceQuote.currency,
+    pricingVersion: POINTS_PRICING_VERSION,
+    markupBps: 0,
+    currency: "NGN",
     status: "pending",
     expiresAt,
     debitReason: `${priceQuote.serviceId} SMS activation`,
@@ -327,7 +332,7 @@ async function createPersistentOrder(input: CreateSmsOrderInput): Promise<{
     try {
       await refundSmsAllocation(
         input.userId,
-        priceQuote.retailPriceMinor,
+        SMS_ACTIVATION_POINTS,
         input.idempotencyKey
       );
     } catch {

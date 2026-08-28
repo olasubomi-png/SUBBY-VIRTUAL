@@ -2,8 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   formatPoints,
   isCreditEffect,
+  KOBO_PER_POINT,
+  NGN_MAJOR_PER_POINT,
   minorToPoints,
+  pointsToKobo,
   pointsToMinor,
+  SMS_ACTIVATION_POINTS,
 } from "./subbyPoints";
 import {
   addDemoCredits,
@@ -24,10 +28,22 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("SUBBY Points representation", () => {
-  it("uses 1:1 identity with ledger minor units", () => {
-    expect(minorToPoints(15000)).toBe(15000);
-    expect(pointsToMinor(15000)).toBe(15000);
+  it("uses 1:1 identity with ledger units", () => {
+    expect(minorToPoints(15)).toBe(15);
+    expect(pointsToMinor(15)).toBe(15);
     expect(formatPoints(1250)).toBe("1,250");
+  });
+
+  it("prices 1 Point at ₦500 (50_000 kobo)", () => {
+    expect(NGN_MAJOR_PER_POINT).toBe(500);
+    expect(KOBO_PER_POINT).toBe(50_000);
+    expect(SMS_ACTIVATION_POINTS).toBe(1);
+    expect(pointsToKobo(1)).toBe(50_000);
+    expect(pointsToKobo(2)).toBe(100_000);
+    expect(pointsToKobo(5)).toBe(250_000);
+    expect(pointsToKobo(10)).toBe(500_000);
+    expect(pointsToKobo(20)).toBe(1_000_000);
+    expect(pointsToKobo(100)).toBe(5_000_000);
   });
 
   it("classifies ledger effects", () => {
@@ -57,7 +73,7 @@ describe("points debit and refund", () => {
     expect(getDemoWallet(101).balanceMinor).toBe(60);
   });
 
-  it("SMS purchase debits points equal to catalog retail price", async () => {
+  it("SMS purchase debits exactly 1 Point per activation", async () => {
     seedDemoCreditsForTests(102, 50_000, "seed-102");
     const result = await createSmsOrder({
       userId: 102,
@@ -66,8 +82,8 @@ describe("points debit and refund", () => {
       idempotencyKey: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
       provider: new MockSMSProvider(),
     });
-    expect(result.priceMinor).toBe(15_000);
-    expect(result.walletBalanceMinor).toBe(35_000);
+    expect(result.priceMinor).toBe(1);
+    expect(result.walletBalanceMinor).toBe(49_999);
   });
 
   it("allocation failure refunds points once", async () => {

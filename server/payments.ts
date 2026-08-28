@@ -25,7 +25,9 @@ export function listSafePointPackages() {
     label: p.label,
     points: p.points,
     amountMinor: p.amountMinor,
+    ngnMajor: p.ngnMajor,
     currency: p.currency,
+    pricingVersion: p.pricingVersion,
   }));
 }
 

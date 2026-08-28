@@ -1,5 +1,11 @@
 # Paystack Payment Integration
 
+## Pricing
+
+1 Point = ₦500 = 50,000 kobo.
+
+Paystack `amount` is always `points × 50000`, computed server-side from the package.
+
 ## Flow
 
 1. User selects a **server-defined** Points package (`packageId` only).

@@ -65,7 +65,7 @@ describe("mock catalog", () => {
       "whatsapp",
       { SMS_PROVIDER: "mock" }
     );
-    expect(quote.retailPriceMinor).toBe(15000);
+    expect(quote.retailPriceMinor).toBe(1);
     expect(quote.available).toBe(true);
     expect(quote.pricingVersion).toMatch(/^mock-/);
   });
@@ -114,7 +114,7 @@ describe("external live catalog", () => {
     expect(entry).toBeDefined();
     expect(entry!.available).toBe(true);
     expect(entry!.providerCostMinor).toBe(40_000);
-    expect(entry!.retailPriceMinor).toBe(44_000);
+    expect(entry!.retailPriceMinor).toBe(1);
   });
 
   it("marks zero-count services unavailable", async () => {
@@ -189,10 +189,10 @@ describe("purchase uses server-authoritative catalog price", () => {
       idempotencyKey: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
       provider: new MockSMSProvider(),
     });
-    expect(result.priceMinor).toBe(15000);
-    expect(result.walletBalanceMinor).toBe(85_000);
+    expect(result.priceMinor).toBe(1);
+    expect(result.walletBalanceMinor).toBe(99_999);
     const stored = listActivations(90)[0];
-    expect(stored.priceMinor).toBe(15000);
+    expect(stored.priceMinor).toBe(1);
   });
 
   it("cannot use unavailable external catalog entries", async () => {

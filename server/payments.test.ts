@@ -19,7 +19,8 @@ describe("point packages", () => {
   it("exposes server-authoritative packages", () => {
     const packages = listPointPackages();
     expect(packages.length).toBeGreaterThan(0);
-    expect(getPointPackage("pts_5k").points).toBe(5000);
+    expect(getPointPackage("pts_5").points).toBe(5);
+    expect(getPointPackage("pts_5").amountMinor).toBe(250_000);
     expect(() => getPointPackage("nope")).toThrow(/Unknown/);
   });
 });
@@ -198,12 +199,12 @@ describe("initialize top-up (demo mode)", () => {
     const result = await initializePointTopUp({
       userId: 1,
       email: "a@b.com",
-      packageId: "pts_1k",
+      packageId: "pts_1",
       idempotencyKey: "11111111-1111-4111-8111-111111111111",
       provider,
     });
-    expect(result.points).toBe(1000);
-    expect(result.amountMinor).toBe(1000);
+    expect(result.points).toBe(1);
+    expect(result.amountMinor).toBe(50_000);
     expect(result.authorizationUrl).toBeTruthy();
     expect(result.reference).toContain("sbp_1_");
   });

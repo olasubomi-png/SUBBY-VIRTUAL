@@ -37,8 +37,8 @@ describe("SMS order creation", () => {
     });
     expect(result.status).toBe("active");
     expect(result.phoneNumber.startsWith("+")).toBe(true);
-    expect(result.priceMinor).toBe(15000);
-    expect(result.walletBalanceMinor).toBe(35000);
+    expect(result.priceMinor).toBe(1);
+    expect(result.walletBalanceMinor).toBe(49999);
     expect(result.reused).toBe(false);
     expect(result.audit).toMatch(/Mock/);
     expect(getDemoWallet(42).ledger.filter(e => e.type === "DEBIT")).toHaveLength(
@@ -47,7 +47,7 @@ describe("SMS order creation", () => {
   });
 
   it("rejects insufficient balance without creating an order", async () => {
-    seedDemoCreditsForTests(43, 1000, "seed-43");
+    // no credits for user 43
     await expect(
       createSmsOrder({
         userId: 43,
@@ -57,7 +57,7 @@ describe("SMS order creation", () => {
         provider,
       })
     ).rejects.toThrow("Insufficient balance");
-    expect(getDemoWallet(43).balanceMinor).toBe(1000);
+    expect(getDemoWallet(43).balanceMinor).toBe(0);
     expect(getDemoWallet(43).ledger.filter(e => e.type === "DEBIT")).toHaveLength(
       0
     );
@@ -97,8 +97,8 @@ describe("SMS order creation", () => {
       idempotencyKey: "55555555-5555-4555-8555-555555555555",
       provider,
     });
-    expect(result.priceMinor).toBe(12000);
-    expect(result.walletBalanceMinor).toBe(38000);
+    expect(result.priceMinor).toBe(1);
+    expect(result.walletBalanceMinor).toBe(49999);
   });
 
   it("returns the existing order for a duplicate idempotency key without double-charging", async () => {

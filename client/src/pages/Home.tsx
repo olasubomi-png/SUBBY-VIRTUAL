@@ -577,8 +577,7 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
                       );
                       return (
                       <option key={service.id} value={service.id}>
-                        {service.name} ·{" "}
-                        {(quote?.amount ?? 0).toLocaleString()} pts
+                        {service.name} · 1 Point
                       </option>
                       );
                     })}
@@ -1822,7 +1821,7 @@ function Wallet() {
     onSuccess: () => wallet.refetch(),
   });
   const initializeTopUp = trpc.workspace.initializeTopUp.useMutation();
-  const [selectedPackage, setSelectedPackage] = useState("pts_5k");
+  const [selectedPackage, setSelectedPackage] = useState("pts_5");
   const [pendingTopUpId, setPendingTopUpId] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
     return sessionStorage.getItem("subby_pending_topup");
@@ -1875,8 +1874,7 @@ function Wallet() {
         <p className="mb-2 text-sm text-slate-500">Workspace / Wallet</p>
         <h1 className="text-3xl font-semibold text-white">Wallet</h1>
         <p className="mt-2 text-sm text-slate-400">
-          SUBBY Points balance with an auditable ledger. Payments are verified
-          server-side.
+          1 Point = ₦500 = 1 virtual number. Payments are verified server-side.
         </p>
       </div>
       <Card className="border-cyan-300/20 bg-gradient-to-br from-cyan-400/10 to-[#10131c] shadow-none">
@@ -1919,7 +1917,8 @@ function Wallet() {
               >
                 <p className="text-sm font-medium text-white">{pkg.label}</p>
                 <p className="mt-1 text-xs text-slate-500">
-                  ₦{(pkg.amountMinor / 100).toFixed(2)}
+                  {pkg.points} Point{pkg.points === 1 ? "" : "s"} — ₦
+                  {(pkg.ngnMajor ?? pkg.amountMinor / 100).toLocaleString()}
                 </p>
               </button>
             ))}

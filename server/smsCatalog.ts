@@ -104,19 +104,20 @@ export function toPublicCatalog(entries: NormalizedCatalogEntry[]): PublicCatalo
 }
 
 function mockCatalog(markupBps: number): CatalogSnapshot {
+  // User-facing activation cost is always 1 Point (provider cost is internal only)
   const pricing: Array<{ serviceId: string; amount: number }> = [
-    { serviceId: "verify", amount: 15000 },
-    { serviceId: "whatsapp", amount: 15000 },
-    { serviceId: "telegram", amount: 12000 },
-    { serviceId: "google", amount: 18000 },
-    { serviceId: "facebook", amount: 14000 },
-    { serviceId: "instagram", amount: 14000 },
-    { serviceId: "tiktok", amount: 16000 },
-    { serviceId: "twitter", amount: 15000 },
-    { serviceId: "discord", amount: 13000 },
-    { serviceId: "uber", amount: 17000 },
-    { serviceId: "amazon", amount: 16000 },
-    { serviceId: "sandbox", amount: 10000 },
+    { serviceId: "verify", amount: 1 },
+    { serviceId: "whatsapp", amount: 1 },
+    { serviceId: "telegram", amount: 1 },
+    { serviceId: "google", amount: 1 },
+    { serviceId: "facebook", amount: 1 },
+    { serviceId: "instagram", amount: 1 },
+    { serviceId: "tiktok", amount: 1 },
+    { serviceId: "twitter", amount: 1 },
+    { serviceId: "discord", amount: 1 },
+    { serviceId: "uber", amount: 1 },
+    { serviceId: "amazon", amount: 1 },
+    { serviceId: "sandbox", amount: 1 },
   ];
   const countries = [
     { code: "NG", name: "Nigeria" },
@@ -247,9 +248,8 @@ export async function buildExternalCatalog(
     const serviceId = REVERSE_SERVICE[row.serviceCode];
     if (!countryCode || !serviceId) continue; // skip unmapped provider rows
     let providerCostMinor: number;
-    let retailPriceMinor: number;
     try {
-      ({ providerCostMinor, retailPriceMinor } = computeRetailFromProviderMajor(
+      ({ providerCostMinor } = computeRetailFromProviderMajor(
         row.cost,
         fx,
         markupBps
@@ -257,6 +257,8 @@ export async function buildExternalCatalog(
     } catch {
       continue; // skip invalid price rows
     }
+    // User pays 1 Point; provider cost retained for internal accounting only
+    const retailPriceMinor = 1;
     entries.push({
       countryCode,
       countryName: countryCode,
