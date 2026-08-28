@@ -26,6 +26,7 @@ import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
+import { BrandLockup, BrandMark } from "./Brand";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Page 1", path: "/" },
@@ -141,22 +142,16 @@ function DashboardLayoutContent({
           className="border-r-0"
           disableTransition={isResizing}
         >
-          <SidebarHeader className="h-16 justify-center">
-            <div className="flex items-center gap-3 px-2 transition-all w-full">
+          <SidebarHeader className="h-16 justify-center border-b border-white/[0.06]">
+            <div className="flex w-full items-center gap-2 px-2 transition-all">
               <button
                 onClick={toggleSidebar}
-                className="h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="Toggle navigation"
               >
-                <PanelLeft className="h-4 w-4 text-muted-foreground" />
+                <PanelLeft className="h-4 w-4 text-slate-400" />
               </button>
-              {!isCollapsed ? (
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold tracking-tight truncate">
-                    Navigation
-                  </span>
-                </div>
-              ) : null}
+              <BrandLockup collapsed={isCollapsed} className="min-w-0 flex-1" />
             </div>
           </SidebarHeader>
 
@@ -226,16 +221,13 @@ function DashboardLayoutContent({
 
       <SidebarInset>
         {isMobile && (
-          <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
-            <div className="flex items-center gap-2">
+          <div className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-white/[0.06] bg-background/95 px-3 backdrop-blur">
+            <div className="flex min-w-0 items-center gap-2">
               <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col gap-1">
-                  <span className="tracking-tight text-foreground">
-                    {activeMenuItem?.label ?? "Menu"}
-                  </span>
-                </div>
-              </div>
+              <BrandMark size={26} />
+              <span className="truncate text-sm font-medium tracking-tight text-foreground">
+                {activeMenuItem?.label ?? "SUBBY VIRTUAL"}
+              </span>
             </div>
           </div>
         )}

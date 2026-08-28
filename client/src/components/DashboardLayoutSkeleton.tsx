@@ -1,45 +1,37 @@
 import { Skeleton } from "./ui/skeleton";
+import { BrandMark } from "./Brand";
 
 export function DashboardLayoutSkeleton() {
   return (
     <div className="flex min-h-screen bg-background">
-      {/* Sidebar skeleton */}
-      <div className="w-[280px] border-r border-border bg-background p-4 space-y-6">
-        {/* Logo area */}
+      <div className="hidden w-[260px] space-y-6 border-r border-border bg-[#0a0c12] p-4 md:block">
         <div className="flex items-center gap-3 px-2">
-          <Skeleton className="h-8 w-8 rounded-md" />
-          <Skeleton className="h-4 w-24" />
-        </div>
-
-        {/* Menu items */}
-        <div className="space-y-2 px-2">
-          <Skeleton className="h-10 w-full rounded-lg" />
-          <Skeleton className="h-10 w-full rounded-lg" />
-          <Skeleton className="h-10 w-full rounded-lg" />
-        </div>
-
-        {/* User profile area at bottom */}
-        <div className="absolute bottom-4 left-4 right-4">
-          <div className="flex items-center gap-3 px-1">
-            <Skeleton className="h-9 w-9 rounded-full" />
-            <div className="flex-1 space-y-2">
-              <Skeleton className="h-3 w-20" />
-              <Skeleton className="h-2 w-32" />
-            </div>
+          <BrandMark size={28} />
+          <div className="space-y-1.5">
+            <Skeleton className="h-3 w-28" />
+            <Skeleton className="h-2 w-24" />
           </div>
         </div>
-      </div>
-
-      {/* Main content skeleton */}
-      <div className="flex-1 p-4 space-y-4">
-        {/* Content blocks */}
-        <Skeleton className="h-12 w-48 rounded-lg" />
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <Skeleton className="h-32 rounded-xl" />
-          <Skeleton className="h-32 rounded-xl" />
-          <Skeleton className="h-32 rounded-xl" />
+        <div className="space-y-2 px-1">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Skeleton key={index} className="h-10 w-full rounded-xl" />
+          ))}
         </div>
-        <Skeleton className="h-64 rounded-xl" />
+      </div>
+      <div className="flex flex-1 flex-col">
+        <div className="flex h-[76px] items-center gap-3 border-b border-border px-5">
+          <BrandMark size={28} className="md:hidden" />
+          <Skeleton className="h-4 w-40" />
+        </div>
+        <div className="space-y-4 p-5 md:p-10">
+          <Skeleton className="h-8 w-56" />
+          <Skeleton className="h-4 w-80 max-w-full" />
+          <div className="grid gap-4 md:grid-cols-3">
+            <Skeleton className="h-28 rounded-2xl" />
+            <Skeleton className="h-28 rounded-2xl" />
+            <Skeleton className="h-28 rounded-2xl" />
+          </div>
+        </div>
       </div>
     </div>
   );

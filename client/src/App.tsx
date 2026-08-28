@@ -6,34 +6,30 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { ShieldCheck } from "lucide-react";
 import { LocalAuthCard } from "./components/LocalAuthCard";
+import { WorkspaceLoading } from "./components/WorkspaceLoading";
+import { BrandMark } from "./components/Brand";
 import { useLocation } from "wouter";
 
 function ProtectedWorkspace() {
   const { user, loading } = useAuth();
   const [location] = useLocation();
-  if (loading)
-    return (
-      <div className="grid min-h-screen place-items-center bg-[#080a0f] text-cyan-200">
-        Loading secure workspace…
-      </div>
-    );
+  if (loading) return <WorkspaceLoading />;
   if (!user)
     return (
-      <div className="grid min-h-screen place-items-center bg-[#080a0f] p-6">
+      <div className="grid min-h-screen place-items-center bg-[#080a0f] p-4 sm:p-6">
         <LocalAuthCard />
       </div>
     );
   if (location === "/admin" && user.role !== "admin")
     return (
       <div className="grid min-h-screen place-items-center bg-[#080a0f] p-6 text-center">
-        <div>
-          <ShieldCheck className="mx-auto h-10 w-10 text-cyan-300" />
-          <h1 className="mt-5 text-2xl font-semibold text-white">
+        <div className="max-w-sm">
+          <BrandMark size={48} className="mx-auto opacity-90" />
+          <h1 className="mt-5 font-display text-2xl font-semibold text-white">
             Administrator access required
           </h1>
-          <p className="mt-2 max-w-sm text-sm text-slate-400">
+          <p className="mt-2 text-sm leading-6 text-slate-400">
             This operations console is restricted to approved administrator
             accounts.
           </p>

@@ -9,6 +9,7 @@ import {
   getUsableDisplayName,
 } from "@shared/greeting";
 import { cn } from "@/lib/utils";
+import { BrandLockup, BrandMark } from "@/components/Brand";
 import {
   ArrowUpRight,
   BarChart3,
@@ -69,18 +70,8 @@ function Sidebar({
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex items-center gap-3 px-2">
-          <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-cyan-300 to-blue-500 text-sm font-black text-[#07101e] shadow-[0_0_24px_rgba(34,211,238,0.25)]">
-            S
-          </div>
-          <div>
-            <div className="text-sm font-bold tracking-[0.18em] text-white">
-              SUBBY
-            </div>
-            <div className="text-[10px] font-semibold tracking-[0.24em] text-cyan-300/80">
-              VIRTUAL
-            </div>
-          </div>
+        <div className="px-1">
+          <BrandLockup />
         </div>
         <div className="mt-12 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
           Workspace
@@ -2040,7 +2031,7 @@ export default function Home() {
     );
   }
   return (
-    <div className="min-h-screen bg-[#080a0f] text-slate-200">
+    <div className="workspace-shell min-h-screen bg-[#080a0f] text-slate-200">
       <Sidebar
         active={active}
         setActive={setActive}
@@ -2051,7 +2042,7 @@ export default function Home() {
       />
       <div className="lg:pl-[260px]">
         <header className="sticky top-0 z-20 flex h-[76px] items-center justify-between border-b border-white/[0.06] bg-[#080a0f]/90 px-5 backdrop-blur-xl md:px-10">
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <button
               aria-label="Open navigation"
               onClick={() => setMobileOpen(true)}
@@ -2059,9 +2050,10 @@ export default function Home() {
             >
               <Menu className="h-5 w-5" />
             </button>
-            <div className="hidden text-sm font-medium text-slate-500 md:block">
+            <BrandMark size={28} className="lg:hidden" />
+            <div className="hidden min-w-0 text-sm font-medium text-slate-500 md:block">
               Workspace <span className="mx-2 text-slate-700">/</span>{" "}
-              <span className="text-slate-300">{title}</span>
+              <span className="truncate text-slate-300">{title}</span>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -2074,7 +2066,7 @@ export default function Home() {
             </div>
           </div>
         </header>
-        <main className="mx-auto max-w-[1400px] p-5 md:p-10">
+        <main className="mx-auto w-full max-w-[1400px] overflow-x-hidden p-4 sm:p-5 md:p-10">
           {active === "overview" && <Overview setActive={setActive} />}
           {active === "sms" && <RequestPage type="sms" />}
           {active === "mail" && <RequestPage type="mail" />}

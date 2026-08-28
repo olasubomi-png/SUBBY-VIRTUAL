@@ -4,6 +4,7 @@ import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
+import { BrandLogo } from "./Brand";
 
 export function LocalAuthCard() {
   const [mode, setMode] = useState<"login" | "signup">("login");
@@ -31,12 +32,12 @@ export function LocalAuthCard() {
   }
 
   return (
-    <Card className="w-full max-w-md border-white/[0.08] bg-[#10131c] shadow-2xl shadow-cyan-950/20">
-      <CardHeader>
-        <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-cyan-300 to-blue-500 text-sm font-black text-[#07101e]">
-          S
+    <Card className="w-full max-w-md border-white/[0.08] bg-[#10131c] shadow-[0_24px_60px_rgba(0,0,0,0.45)]">
+      <CardHeader className="space-y-3 text-center">
+        <div className="mx-auto w-full max-w-[220px]">
+          <BrandLogo className="mx-auto h-auto max-h-28 w-full" priority />
         </div>
-        <CardTitle className="pt-4 text-xl text-white">
+        <CardTitle className="pt-1 text-xl text-white">
           {mode === "login"
             ? "Sign in to SUBBY VIRTUAL"
             : "Create your SUBBY account"}

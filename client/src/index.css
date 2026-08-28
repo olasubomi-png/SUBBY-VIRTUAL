@@ -27,6 +27,10 @@
   --radius-sm: 0.45rem;
 }
 
+@utility font-display {
+  font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
+}
+
 @layer base {
   * {
     @apply border-border;
@@ -61,4 +65,28 @@
     animation-duration: 280ms;
     animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
   }
+}
+
+
+@keyframes brand-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.brand-spinner {
+  animation: brand-spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-spinner {
+    animation: none;
+    border-top-color: rgba(103, 232, 249, 0.45);
+  }
+}
+
+/* Mobile: prevent accidental horizontal scroll from wide cards/tables */
+.workspace-shell {
+  max-width: 100vw;
+  overflow-x: hidden;
 }
