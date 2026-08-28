@@ -558,6 +558,14 @@ export const appRouter = router({
             provider,
             providerType,
           });
+          // Bounded server-side OTP polling (max 20 attempts via job dispatcher)
+          if (!result.reused && result.status === "active" && result.id) {
+            try {
+              await queueSmsStatusPollJob(ctx.user.id, result.id);
+            } catch {
+              // non-fatal — client can still call pollSms
+            }
+          }
           if (shouldUsePersistentStore() && !result.reused) {
             await writeAuditLog({
               actorUserId: ctx.user.id,
@@ -565,7 +573,7 @@ export const appRouter = router({
               targetType: "smsActivation",
               targetId: result.id,
               metadata: {
-                mode: "mock",
+                mode: providerType,
                 country: input.country,
                 serviceId: input.serviceId,
               },

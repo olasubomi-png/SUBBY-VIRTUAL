@@ -427,6 +427,13 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
       mailInboxes.refetch();
     },
   });
+  const pollSms = trpc.workspace.pollSms.useMutation({
+    onSuccess: () => {
+      setFeedback("Checked provider for incoming SMS.");
+      smsRequests.refetch();
+      smsDetail.refetch();
+    },
+  });
   const simulateSms = trpc.workspace.simulateSms.useMutation({
     onSuccess: data => {
       setFeedback(`SMS simulation queued · job ${data.id}`);
@@ -668,6 +675,14 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
                       <Button
                         variant="outline"
                         className="mt-3 border-white/10 bg-transparent text-xs text-slate-300"
+                        disabled={pollSms.isPending}
+                        onClick={() => pollSms.mutate({ id: item.id })}
+                        className="h-9 rounded-lg border border-white/10 px-3 text-xs text-slate-200"
+                      >
+                        {pollSms.isPending ? "Checking…" : "Check SMS"}
+                      </Button>
+                      <Button
+                        variant="outline"
                         disabled={simulateSms.isPending}
                         onClick={() => simulateSms.mutate({ id: item.id })}
                       >

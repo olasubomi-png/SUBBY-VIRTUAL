@@ -43,8 +43,9 @@ Provider statuses are **mapped** into these states; they do not replace them.
 
 The SMS-Activate-compatible API uses **polling** (`getStatus`), not webhooks.
 
-- Client/server may call `workspace.pollSms` once per check (bounded).
-- No unbounded background poll loops.
+- Client may call `workspace.pollSms` once per check (bounded).
+- Server queues a bounded `SMS_STATUS_POLL` job (max 20 attempts) after allocation.
+- No unbounded per-user timers or infinite loops.
 - Duplicate code events are idempotent via the existing lifecycle.
 
 Webhook support is not required for this adapter. A future provider that supports signed webhooks can be added without rewriting order logic.
@@ -112,3 +113,29 @@ provider major cost
 - Single external adapter in this step (SMS-Activate-compatible).
 - External retail prices are derived from live provider costs + markup; mock mode keeps the static demo catalog.
 - No payment-gateway integration in this step.
+
+
+## Production setup (SMS-Activate-compatible)
+
+1. Obtain an API key from an SMS-Activate-compatible provider.
+2. Set on the VPS (never commit):
+
+```bash
+SMS_PROVIDER=external
+SMS_PROVIDER_BASE_URL=https://api.sms-activate.ae/stubs/handler_api.php
+SMS_PROVIDER_API_KEY=your_key_here
+```
+
+3. Restart the Node process / PM2.
+4. Confirm `admin.providerHealth` reports SMS reachable.
+5. Keep `SMS_PROVIDER=mock` for automated tests and local demo.
+
+### Credentials required
+
+| Variable | Purpose |
+|----------|---------|
+| `SMS_PROVIDER` | `mock` or `external` |
+| `SMS_PROVIDER_BASE_URL` | Provider handler API URL |
+| `SMS_PROVIDER_API_KEY` | Server-side API key |
+
+Optional: `SMS_PROVIDER_API_SECRET` (unused by SMS-Activate adapter).

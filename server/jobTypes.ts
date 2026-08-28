@@ -5,6 +5,7 @@ export const JOB_TYPES = [
   "DEMO_EMAIL_SIMULATION",
   "MAILBOX_EXPIRY",
   "ACTIVATION_EXPIRY",
+  "SMS_STATUS_POLL",
 ] as const;
 
 export type JobType = (typeof JOB_TYPES)[number];
@@ -23,6 +24,7 @@ export const jobPayloadSchemas = {
   DEMO_EMAIL_SIMULATION: z.object({ inboxId: resourceId }).strict(),
   MAILBOX_EXPIRY: z.object({ inboxId: resourceId }).strict(),
   ACTIVATION_EXPIRY: z.object({ activationId: resourceId }).strict(),
+  SMS_STATUS_POLL: z.object({ activationId: resourceId }).strict(),
 } satisfies Record<JobType, z.ZodTypeAny>;
 
 export const jobTypeSchema = z.enum(JOB_TYPES);

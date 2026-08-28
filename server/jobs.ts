@@ -146,6 +146,36 @@ export async function queueSmsSimulationJob(
   });
 }
 
+export async function queueSmsStatusPollJob(
+  userId: number,
+  activationId: string
+) {
+  const externalId = `sms-status-poll-${userId}-${activationId}`;
+  if (shouldUsePersistentStore()) {
+    try {
+      return await getPersistentJob(userId, externalId);
+    } catch (error) {
+      if (error instanceof Error && error.message !== "Job not found") throw error;
+      return createJob({
+        externalId,
+        userId,
+        jobType: "SMS_STATUS_POLL",
+        payload: { activationId },
+        maxAttempts: 20,
+      });
+    }
+  }
+  const existing = getFallbackJobByExternalId(externalId);
+  if (existing) return safeFallbackJob(existing);
+  return createJob({
+    externalId,
+    userId,
+    jobType: "SMS_STATUS_POLL",
+    payload: { activationId },
+    maxAttempts: 20,
+  });
+}
+
 export async function queueEmailSimulationJob(userId: number, inboxId: string) {
   const externalId = `email-simulation-${userId}-${inboxId}`;
   if (shouldUsePersistentStore()) {
@@ -183,7 +213,7 @@ export async function createJob(input: {
   payload: Record<string, string>;
   maxAttempts?: number;
 }) {
-  const maxAttempts = Math.max(1, Math.min(input.maxAttempts ?? 3, 5));
+  const maxAttempts = Math.max(1, Math.min(input.maxAttempts ?? 3, 30));
   return shouldUsePersistentStore()
     ? createPersistentJob({ ...input, maxAttempts })
     : createFallbackJob({ ...input, maxAttempts });
@@ -357,6 +387,30 @@ async function executeJob(
       : expireInbox(job.userId, resourceId);
     await progress(80);
     return { kind: "mailbox_expiry", resourceId, completed: Boolean(result) };
+  }
+  if (job.jobType === "SMS_STATUS_POLL") {
+    const { pollSmsOrderCode } = await import("./smsOrders");
+    const { getConfiguredSmsProvider } = await import("./providers");
+    const provider = getConfiguredSmsProvider();
+    const order = await pollSmsOrderCode(job.userId, resourceId, provider);
+    const status = String(order.status);
+    if (
+      status === "completed" ||
+      status === "code_received" ||
+      status === "cancelled" ||
+      status === "expired" ||
+      status === "failed"
+    ) {
+      await progress(100);
+      return {
+        kind: "sms_status_poll",
+        resourceId,
+        status,
+        completed: true,
+      };
+    }
+    // Still waiting — signal retryable so dispatcher reschedules (bounded by maxAttempts)
+    throw new Error("SMS code temporarily unavailable — retry poll");
   }
   const result = persistent
     ? await expirePersistentActivation(job.userId, resourceId)
