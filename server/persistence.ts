@@ -784,13 +784,15 @@ export async function completePersistentActivation(input: {
       .limit(1);
     const activation = rows[0];
     if (!activation) throw new Error("Activation not found");
-    const completable = new Set([
-      "WAITING",
-      "ACTIVE",
-      "active",
-      "code_received",
-    ]);
-    if (!completable.has(activation.status)) {
+    const { normalizeSmsOrderStatus, isCodeEligibleSmsOrderStatus } =
+      await import("./smsOrderLifecycle");
+    let currentStatus;
+    try {
+      currentStatus = normalizeSmsOrderStatus(activation.status);
+    } catch {
+      throw new Error("Invalid activation state");
+    }
+    if (!isCodeEligibleSmsOrderStatus(currentStatus)) {
       const message = await tx
         .select()
         .from(smsMessages)
@@ -897,16 +899,15 @@ export async function cancelPersistentActivation(
     )
     .limit(1);
   if (!rows[0]) throw new Error("Activation not found");
-  const cancellable = new Set([
-    "WAITING",
-    "ACTIVE",
-    "pending",
-    "allocating",
-    "active",
-    "code_received",
-  ]);
-  if (!cancellable.has(rows[0].status))
+  const {
+    assertSmsOrderTransitionFromRaw,
+    isCancellableSmsOrderStatus,
+    normalizeSmsOrderStatus,
+  } = await import("./smsOrderLifecycle");
+  const from = normalizeSmsOrderStatus(rows[0].status);
+  if (!isCancellableSmsOrderStatus(from))
     throw new Error("Activation cannot be cancelled");
+  assertSmsOrderTransitionFromRaw(rows[0].status, "cancelled");
   const now = new Date();
   const updated = await db
     .update(smsActivations)
@@ -1465,17 +1466,16 @@ export async function expirePersistentActivation(
     )
     .limit(1);
   if (!rows[0]) throw new Error("Activation not found");
-  if (rows[0].status === "EXPIRED" || rows[0].status === "expired")
-    return rows[0];
-  const expirable = new Set([
-    "WAITING",
-    "ACTIVE",
-    "pending",
-    "allocating",
-    "active",
-  ]);
-  if (!expirable.has(rows[0].status))
+  const {
+    assertSmsOrderTransitionFromRaw,
+    isExpirableSmsOrderStatus,
+    normalizeSmsOrderStatus,
+  } = await import("./smsOrderLifecycle");
+  const from = normalizeSmsOrderStatus(rows[0].status);
+  if (from === "expired") return rows[0];
+  if (!isExpirableSmsOrderStatus(from))
     throw new Error("Activation cannot be expired in its current state");
+  assertSmsOrderTransitionFromRaw(rows[0].status, "expired");
   const now = new Date();
   const updated = await db
     .update(smsActivations)

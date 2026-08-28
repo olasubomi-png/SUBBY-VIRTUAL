@@ -1,9 +1,17 @@
+import {
+  assertSmsOrderTransitionFromRaw,
+  isCodeEligibleSmsOrderStatus,
+  isExpirableSmsOrderStatus,
+  isCancellableSmsOrderStatus,
+  normalizeSmsOrderStatus,
+} from "./smsOrderLifecycle";
 export type DemoActivation = {
   id: string;
   userId: number;
   country: string;
   serviceId: string;
   phoneNumber: string;
+  /** Canonical SMS order status only — never store legacy uppercase values. */
   status:
     | "pending"
     | "allocating"
@@ -12,14 +20,7 @@ export type DemoActivation = {
     | "completed"
     | "cancelled"
     | "expired"
-    | "failed"
-    // Legacy aliases kept for older in-memory records during transition
-    | "ACTIVE"
-    | "MESSAGE_RECEIVED"
-    | "COMPLETED"
-    | "EXPIRED"
-    | "CANCELLED"
-    | "WAITING";
+    | "failed";
   priceMinor: number;
   currency?: "NGN" | "USD";
   idempotencyKey?: string;
@@ -210,8 +211,15 @@ export function getActivation(userId: number, id: string) {
 }
 export function simulateSms(userId: number, id: string) {
   const item = getActivation(userId, id);
-  const allowed = new Set(["ACTIVE", "active", "code_received", "WAITING"]);
-  if (!allowed.has(item.status)) throw new Error("Invalid activation state");
+  const from = normalizeSmsOrderStatus(item.status);
+  if (!isCodeEligibleSmsOrderStatus(from)) {
+    throw new Error("Invalid activation state");
+  }
+  if (from === "active") {
+    assertSmsOrderTransitionFromRaw(item.status, "code_received");
+    item.status = "code_received";
+  }
+  assertSmsOrderTransitionFromRaw(item.status, "completed");
   item.status = "completed";
   item.verificationCode = item.verificationCode ?? "482913";
   item.updatedAt = now();
@@ -224,16 +232,10 @@ export function simulateSms(userId: number, id: string) {
 }
 export function cancelSms(userId: number, id: string) {
   const item = getActivation(userId, id);
-  const cancellable = new Set([
-    "ACTIVE",
-    "active",
-    "pending",
-    "allocating",
-    "code_received",
-    "WAITING",
-  ]);
-  if (!cancellable.has(item.status))
+  const from = normalizeSmsOrderStatus(item.status);
+  if (!isCancellableSmsOrderStatus(from))
     throw new Error("Activation cannot be cancelled");
+  assertSmsOrderTransitionFromRaw(item.status, "cancelled");
   item.status = "cancelled";
   item.cancelledAt = now();
   item.updatedAt = item.cancelledAt;
@@ -241,16 +243,11 @@ export function cancelSms(userId: number, id: string) {
 }
 export function expireActivation(userId: number, id: string) {
   const item = getActivation(userId, id);
-  if (item.status === "EXPIRED" || item.status === "expired") return item;
-  const expirable = new Set([
-    "ACTIVE",
-    "active",
-    "pending",
-    "allocating",
-    "WAITING",
-  ]);
-  if (!expirable.has(item.status))
+  const from = normalizeSmsOrderStatus(item.status);
+  if (from === "expired") return item;
+  if (!isExpirableSmsOrderStatus(from))
     throw new Error("Activation cannot be expired in its current state");
+  assertSmsOrderTransitionFromRaw(item.status, "expired");
   item.status = "expired";
   item.updatedAt = now();
   return item;

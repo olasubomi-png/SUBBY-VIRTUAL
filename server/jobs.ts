@@ -56,6 +56,10 @@ import {
   simulateEmail,
   simulateSms,
 } from "./demoState";
+import {
+  isSimulatableSmsOrderStatus,
+  normalizeSmsOrderStatus,
+} from "./smsOrderLifecycle";
 
 export { expireDemoResources } from "./jobsCleanup";
 
@@ -119,8 +123,7 @@ export async function queueSmsSimulationJob(
       if (error instanceof Error && error.message !== "Job not found")
         throw error;
       const activation = await getPersistentActivation(userId, activationId);
-      const activeStatuses = new Set(["ACTIVE", "active", "WAITING"]);
-      if (!activeStatuses.has(activation.status))
+      if (!isSimulatableSmsOrderStatus(normalizeSmsOrderStatus(activation.status)))
         throw new Error("Invalid activation state");
       return createJob({
         externalId,
@@ -133,8 +136,7 @@ export async function queueSmsSimulationJob(
   const existing = getFallbackJobByExternalId(externalId);
   if (existing) return safeFallbackJob(existing);
   const activation = getActivation(userId, activationId);
-  const activeStatuses = new Set(["ACTIVE", "active", "WAITING"]);
-  if (!activeStatuses.has(activation.status))
+  if (!isSimulatableSmsOrderStatus(normalizeSmsOrderStatus(activation.status)))
     throw new Error("Invalid activation state");
   return createJob({
     externalId,

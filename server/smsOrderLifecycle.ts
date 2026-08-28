@@ -1,6 +1,10 @@
 /**
  * Production SMS activation/order lifecycle.
  * Provider-agnostic state machine — works with MockSMSProvider and future providers.
+ *
+ * Canonical states only inside domain logic. Legacy uppercase statuses may exist in
+ * older rows; normalize them at the boundary via normalizeSmsOrderStatus() before
+ * any transition checks or writes.
  */
 
 export const SMS_ORDER_STATUSES = [
@@ -23,7 +27,20 @@ export const TERMINAL_SMS_ORDER_STATUSES: readonly SmsOrderStatus[] = [
   "failed",
 ] as const;
 
-/** Explicit allowed transitions. Terminal states accept none. */
+/**
+ * Explicit allowed transitions.
+ * Terminal states accept none.
+ *
+ * Required happy path:
+ *   pending → allocating → active → code_received → completed
+ * Branching:
+ *   allocating → failed
+ *   active → cancelled | expired | failed
+ *   code_received → cancelled | expired
+ * Also allowed operational exits from early states:
+ *   pending → cancelled | expired | failed
+ *   allocating → cancelled | expired
+ */
 export const SMS_ORDER_TRANSITIONS: Record<
   SmsOrderStatus,
   readonly SmsOrderStatus[]
@@ -31,11 +48,21 @@ export const SMS_ORDER_TRANSITIONS: Record<
   pending: ["allocating", "cancelled", "expired", "failed"],
   allocating: ["active", "cancelled", "expired", "failed"],
   active: ["code_received", "cancelled", "expired", "failed"],
-  code_received: ["completed", "cancelled", "failed"],
+  code_received: ["completed", "cancelled", "expired"],
   completed: [],
   cancelled: [],
   expired: [],
   failed: [],
+};
+
+const LEGACY_STATUS_MAP: Record<string, SmsOrderStatus> = {
+  WAITING: "active",
+  ACTIVE: "active",
+  MESSAGE_RECEIVED: "code_received",
+  COMPLETED: "completed",
+  CANCELLED: "cancelled",
+  EXPIRED: "expired",
+  FAILED: "failed",
 };
 
 export function isSmsOrderStatus(value: string): value is SmsOrderStatus {
@@ -46,6 +73,19 @@ export function isTerminalSmsOrderStatus(status: SmsOrderStatus): boolean {
   return (TERMINAL_SMS_ORDER_STATUSES as readonly string[]).includes(status);
 }
 
+/**
+ * Normalize legacy or mixed-case status strings into canonical lowercase states.
+ * Domain/service code must call this before transition logic.
+ */
+export function normalizeSmsOrderStatus(status: string): SmsOrderStatus {
+  if (isSmsOrderStatus(status)) return status;
+  const legacy = LEGACY_STATUS_MAP[status];
+  if (legacy) return legacy;
+  const lower = status.trim().toLowerCase();
+  if (isSmsOrderStatus(lower)) return lower;
+  throw new Error("Unknown SMS order status");
+}
+
 export function canTransitionSmsOrder(
   from: SmsOrderStatus,
   to: SmsOrderStatus
@@ -53,46 +93,54 @@ export function canTransitionSmsOrder(
   return SMS_ORDER_TRANSITIONS[from].includes(to);
 }
 
+/**
+ * Assert a transition between already-canonical statuses.
+ * Rejects invalid and terminal-source transitions.
+ */
 export function assertSmsOrderTransition(
   from: SmsOrderStatus,
   to: SmsOrderStatus
 ): void {
-  if (!canTransitionSmsOrder(from, to)) {
-    throw new Error(`Invalid SMS order transition: ${from} → ${to}`);
-  }
   if (isTerminalSmsOrderStatus(from)) {
     throw new Error(`SMS order is terminal (${from}) and cannot be modified`);
+  }
+  if (!canTransitionSmsOrder(from, to)) {
+    throw new Error(`Invalid SMS order transition: ${from} → ${to}`);
   }
 }
 
 /**
- * Normalize legacy status strings used before the production lifecycle.
- * Keeps older rows and in-flight demo data interoperable.
+ * Boundary helper: normalize raw stored status, then assert transition to a
+ * canonical target. Use this at persistence/demo boundaries that may still
+ * hold legacy uppercase values.
  */
-export function normalizeSmsOrderStatus(status: string): SmsOrderStatus {
-  const map: Record<string, SmsOrderStatus> = {
-    pending: "pending",
-    allocating: "allocating",
-    active: "active",
-    code_received: "code_received",
-    completed: "completed",
-    cancelled: "cancelled",
-    expired: "expired",
-    failed: "failed",
-    // Legacy
-    WAITING: "active",
-    ACTIVE: "active",
-    MESSAGE_RECEIVED: "code_received",
-    COMPLETED: "completed",
-    CANCELLED: "cancelled",
-    EXPIRED: "expired",
-    FAILED: "failed",
-  };
-  const normalized = map[status] ?? map[status.toLowerCase()];
-  if (!normalized) {
-    throw new Error("Unknown SMS order status");
-  }
-  return normalized;
+export function assertSmsOrderTransitionFromRaw(
+  fromRaw: string,
+  to: SmsOrderStatus
+): SmsOrderStatus {
+  const from = normalizeSmsOrderStatus(fromRaw);
+  assertSmsOrderTransition(from, to);
+  return from;
+}
+
+/** States that may still receive a simulated verification code. */
+export function isCodeEligibleSmsOrderStatus(status: SmsOrderStatus): boolean {
+  return status === "active" || status === "code_received";
+}
+
+/** States that may be cancelled. */
+export function isCancellableSmsOrderStatus(status: SmsOrderStatus): boolean {
+  return canTransitionSmsOrder(status, "cancelled");
+}
+
+/** States that may expire. */
+export function isExpirableSmsOrderStatus(status: SmsOrderStatus): boolean {
+  return canTransitionSmsOrder(status, "expired");
+}
+
+/** States treated as "in flight" for simulation job queueing. */
+export function isSimulatableSmsOrderStatus(status: SmsOrderStatus): boolean {
+  return status === "active";
 }
 
 export type SmsOrderRecord = {
@@ -127,7 +175,8 @@ export function toPublicSmsOrder(order: SmsOrderRecord) {
     status: order.status,
     phoneNumber: order.phoneNumber ?? "",
     verificationCode: order.verificationCode ?? undefined,
-    providerMode: order.providerType === "MOCK" ? ("mock" as const) : ("live" as const),
+    providerMode:
+      order.providerType === "MOCK" ? ("mock" as const) : ("live" as const),
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
     expiresAt: order.expiresAt,

@@ -199,3 +199,36 @@ describe("SMS order lifecycle operations", () => {
     expect(() => assertSmsOrderTransition("failed", "active")).toThrow();
   });
 });
+
+describe("provider failure handling", () => {
+  it("marks the order failed when the provider cannot allocate a number", async () => {
+    seedDemoCreditsForTests(60, 50000, "seed-60");
+    const failingProvider = {
+      healthCheck: async () => ({ ok: true, detail: "ok" }),
+      getCountries: async () => [{ code: "NG", name: "Nigeria" }],
+      getServices: async () => [{ id: "whatsapp", name: "WhatsApp" }],
+      getPricing: async () => [
+        { serviceId: "whatsapp", amount: 15000, currency: "NGN" as const },
+      ],
+      buyActivation: async () => {
+        throw new Error("upstream provider timeout");
+      },
+      getStatus: async () => ({ id: "x", status: "WAITING" as const }),
+      cancelActivation: async () => undefined,
+    };
+    await expect(
+      createSmsOrder({
+        userId: 60,
+        country: "NG",
+        serviceId: "whatsapp",
+        idempotencyKey: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        provider: failingProvider,
+      })
+    ).rejects.toThrow("Unable to allocate SMS number");
+    // Balance was reserved for the attempt; order should be terminal failed.
+    // Debit happens before provider call by design (atomic create+debit).
+    expect(getDemoWallet(60).ledger.filter(e => e.type === "DEBIT")).toHaveLength(
+      1
+    );
+  });
+});
