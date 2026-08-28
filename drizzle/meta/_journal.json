@@ -57,6 +57,13 @@
       "when": 1787784370672,
       "tag": "0007_modern_eternals",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787896038691,
+      "tag": "0008_dapper_shinobi_shaw",
+      "breakpoints": true
     }
   ]
 }

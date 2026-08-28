@@ -3,7 +3,6 @@ import express from "express";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -12,7 +11,7 @@ import { getDatabaseHealth } from "../db";
 import { closeRedis } from "../redis";
 import { dispatchScheduledJobs, expireDemoResources } from "../jobs";
 import { getServerBinding } from "../runtimeConfig";
-import { sdk } from "./sdk";
+import { isScheduledRequest } from "./sdk";
 import { serveStatic, setupVite } from "./vite";
 
 let startupClaimed = false;
@@ -47,7 +46,6 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
-  registerOAuthRoutes(app);
   app.get("/health", async (_req, res) =>
     res.status(200).json({
       status: "ok",
@@ -63,8 +61,8 @@ async function startServer() {
   );
   app.post("/api/scheduled/cleanup", async (req, res) => {
     try {
-      const user = await sdk.authenticateRequest(req);
-      if (!user.isCron) return res.status(403).json({ error: "cron-only" });
+      if (!isScheduledRequest(req))
+        return res.status(403).json({ error: "scheduled-token-required" });
       return res.json({ ok: true, result: await expireDemoResources() });
     } catch (error) {
       return res.status(500).json({
@@ -74,8 +72,8 @@ async function startServer() {
   });
   app.post("/api/scheduled/dispatch-jobs", async (req, res) => {
     try {
-      const user = await sdk.authenticateRequest(req);
-      if (!user.isCron) return res.status(403).json({ error: "cron-only" });
+      if (!isScheduledRequest(req))
+        return res.status(403).json({ error: "scheduled-token-required" });
       const requestedLimit = Number(req.body?.limit ?? 10);
       const limit = Number.isInteger(requestedLimit)
         ? Math.max(1, Math.min(requestedLimit, 25))

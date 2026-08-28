@@ -1,4 +1,4 @@
-import { startLogin } from "@/const";
+import { LocalAuthCard } from "@/components/LocalAuthCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -2006,12 +2006,7 @@ export default function Home() {
             </p>
           </CardHeader>
           <CardContent>
-            <Button
-              onClick={startLogin}
-              className="w-full bg-cyan-300 font-semibold text-slate-950 hover:bg-cyan-200"
-            >
-              Continue to sign in
-            </Button>
+            <LocalAuthCard />
           </CardContent>
         </Card>
       </div>

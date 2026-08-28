@@ -18,6 +18,10 @@ describe("VPS deployment artifacts", () => {
     expect(template).toContain("APP_URL=https://subomivirtual.kdns.fr");
     expect(template).toContain("DATABASE_URL=postgresql://");
     expect(template).toContain("JWT_SECRET=REPLACE_WITH_A_LONG_RANDOM_SECRET");
+    expect(template).toContain("AUTH_BOOTSTRAP_ADMIN_EMAIL=admin@example.com");
+    expect(template).not.toMatch(
+      /VITE_APP_ID|VITE_OAUTH_PORTAL_URL|OAUTH_SERVER_URL|OWNER_OPEN_ID/
+    );
     expect(template).toContain("REPLACE_WITH_STRONG_PASSWORD");
     expect(template).not.toContain("postgresql://subby_app:actual-password@");
   });

@@ -18,6 +18,7 @@ export const users = pgTable(
     openId: varchar("openId", { length: 64 }).notNull().unique(),
     name: text("name"),
     email: varchar("email", { length: 320 }),
+    passwordHash: text("passwordHash"),
     loginMethod: varchar("loginMethod", { length: 64 }),
     role: varchar("role", { length: 16 }).default("user").notNull(),
     status: varchar("status", { length: 16 }).default("active").notNull(),
@@ -27,6 +28,7 @@ export const users = pgTable(
   },
   table => ({
     emailSearch: index("users_email_search_idx").on(table.email),
+    emailUnique: uniqueIndex("users_email_unique_idx").on(table.email),
     nameSearch: index("users_name_search_idx").on(table.name),
     createdOrder: index("users_created_order_idx").on(
       table.createdAt,

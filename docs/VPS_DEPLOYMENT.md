@@ -2,17 +2,17 @@
 
 This guide prepares the existing **mock-only Phase 1** application for a single Ubuntu Linux VPS at `subomivirtual.kdns.fr`. It does not deploy the application, apply migrations, create DNS records, provision a certificate, or enable live SMS, email, payments, or real-money funding.
 
-> **Production process.** The repository has one production entry point: `pnpm start`, which executes `node dist/index.js` with `NODE_ENV=production`. PM2 runs that same compiled entry point once; it does not create a worker fleet or a second application process.
+> **Production process.** The repository has one production entry point: `pnpm start`, which executes `node dist/index.js` with `NODE_ENV=production`. PM2 runs that same compiled entry point once; it does not create a worker fleet or a second application process. Authentication is self-hosted email/password; no external OAuth portal or callback is required.
 
 ## Deployment model
 
-| Layer                   | Phase 1 responsibility                                                                          | Network exposure                         |
-| ----------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| Nginx                   | Public HTTPS termination and reverse proxy for `subomivirtual.kdns.fr`                          | Public ports `80` and `443` only         |
-| Node.js / SUBBY VIRTUAL | React static assets, Express, tRPC, OAuth callback, `/health`, and cron-only dispatch endpoints | `127.0.0.1:3003` for this VPS deployment |
-| PostgreSQL              | Durable production source of truth                                                              | Localhost or private network only        |
-| Redis                   | Recommended distributed rate-limit storage                                                      | Localhost or private network only        |
-| PM2                     | One production process, restart management, and logs                                            | No public port                           |
+| Layer                   | Phase 1 responsibility                                                                                     | Network exposure                         |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| Nginx                   | Public HTTPS termination and reverse proxy for `subomivirtual.kdns.fr`                                     | Public ports `80` and `443` only         |
+| Node.js / SUBBY VIRTUAL | React static assets, Express, tRPC, local email/password auth, `/health`, and cron-only dispatch endpoints | `127.0.0.1:3003` for this VPS deployment |
+| PostgreSQL              | Durable production source of truth                                                                         | Localhost or private network only        |
+| Redis                   | Recommended distributed rate-limit storage                                                                 | Localhost or private network only        |
+| PM2                     | One production process, restart management, and logs                                                       | No public port                           |
 
 The committed Nginx bootstrap configuration is [`deploy/nginx/subomivirtual.kdns.fr.conf`](../deploy/nginx/subomivirtual.kdns.fr.conf). It proxies to the loopback-bound application and forwards `Host`, real IP, and forwarded protocol headers as required by the proxy configuration.[1]
 
@@ -69,19 +69,19 @@ chmod 600 .env
 
 Edit `.env` on the VPS. The following table distinguishes required production values from optional or platform-provided values.
 
-| Variable                                                                    | Requirement                                           | Notes                                                                                                           |
-| --------------------------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `NODE_ENV`                                                                  | Required                                              | Set to `production`.                                                                                            |
-| `HOST`                                                                      | Required for this VPS design                          | Set to `127.0.0.1`; Nginx owns public HTTPS.                                                                    |
-| `PORT`                                                                      | Required for this VPS design                          | Set to `3003`; do not open it publicly. Production fails rather than choosing a surprise fallback port.         |
-| `DATABASE_URL`                                                              | Required                                              | A real `postgres://` or `postgresql://` URL.                                                                    |
-| `REDIS_URL`                                                                 | Recommended                                           | Loopback/private Redis for distributed rate limits; configured Redis fails closed if unavailable.               |
-| `JWT_SECRET`                                                                | Required                                              | Generate a long random server-only value, for example `openssl rand -base64 48`.                                |
-| `VITE_APP_ID`, `OAUTH_SERVER_URL`, `VITE_OAUTH_PORTAL_URL`, `OWNER_OPEN_ID` | Required by existing auth integration                 | Preserve the values supplied by the project/OAuth configuration.                                                |
-| `BUILT_IN_FORGE_API_URL`, `BUILT_IN_FORGE_API_KEY`                          | Only when the existing integration needs them         | Server-only values; do not prefix the server key with `VITE_`.                                                  |
-| `VITE_FRONTEND_FORGE_API_URL`, `VITE_FRONTEND_FORGE_API_KEY`                | Only when the existing browser integration needs them | Values prefixed `VITE_` are build-time browser-visible; do not place database URLs or private credentials here. |
-| `APP_URL`                                                                   | Operational reference                                 | Set to `https://subomivirtual.kdns.fr`; the current Phase 1 runtime does not read it directly.                  |
-| `SMS_PROVIDER_API_KEY`, `MAIL_PROVIDER_API_KEY`                             | Leave unset                                           | Phase 1 is intentionally mock-only.                                                                             |
+| Variable                                                     | Requirement                                           | Notes                                                                                                            |
+| ------------------------------------------------------------ | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`                                                   | Required                                              | Set to `production`.                                                                                             |
+| `HOST`                                                       | Required for this VPS design                          | Set to `127.0.0.1`; Nginx owns public HTTPS.                                                                     |
+| `PORT`                                                       | Required for this VPS design                          | Set to `3003`; do not open it publicly. Production fails rather than choosing a surprise fallback port.          |
+| `DATABASE_URL`                                               | Required                                              | A real `postgres://` or `postgresql://` URL.                                                                     |
+| `REDIS_URL`                                                  | Recommended                                           | Loopback/private Redis for distributed rate limits; configured Redis fails closed if unavailable.                |
+| `JWT_SECRET`                                                 | Required                                              | Generate a long random server-only value, for example `openssl rand -base64 48`.                                 |
+| `AUTH_BOOTSTRAP_ADMIN_EMAIL`                                 | Required for initial administrator bootstrap          | The first signup matching this normalized address receives the `admin` role; subsequent accounts receive `user`. |
+| `BUILT_IN_FORGE_API_URL`, `BUILT_IN_FORGE_API_KEY`           | Only when the existing integration needs them         | Server-only values; do not prefix the server key with `VITE_`.                                                   |
+| `VITE_FRONTEND_FORGE_API_URL`, `VITE_FRONTEND_FORGE_API_KEY` | Only when the existing browser integration needs them | Values prefixed `VITE_` are build-time browser-visible; do not place database URLs or private credentials here.  |
+| `APP_URL`                                                    | Operational reference                                 | Set to `https://subomivirtual.kdns.fr`; the current Phase 1 runtime does not read it directly.                   |
+| `SMS_PROVIDER_API_KEY`, `MAIL_PROVIDER_API_KEY`              | Leave unset                                           | Phase 1 is intentionally mock-only.                                                                              |
 
 The root `.gitignore` already ignores `.env` and common environment-file variants. Do not commit runtime credentials.
 
@@ -96,7 +96,7 @@ sudo -u postgres psql -d subby_virtual -c '\dt'
 sudo -u postgres psql -d subby_virtual -c 'SELECT * FROM drizzle.__drizzle_migrations ORDER BY created_at;'
 ```
 
-Confirm that all migrations through `0007_modern_eternals.sql` have been applied before relying on durable stale-job recovery metadata. This repository preparation does **not** claim that the migrations are applied on any VPS.
+Confirm that all committed migrations through `0008_dapper_shinobi_shaw.sql` have been applied before relying on password-backed local accounts and durable stale-job recovery metadata. This repository preparation does **not** claim that the migrations are applied on any VPS.
 
 ## 5. Build and run with PM2
 

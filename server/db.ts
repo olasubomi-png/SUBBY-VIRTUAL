@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertUser, User, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import {
   getConfiguredDatabaseMode,
@@ -100,7 +100,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     email: user.email ?? null,
     loginMethod: user.loginMethod ?? null,
     lastSignedIn: user.lastSignedIn ?? new Date(),
-    role: user.role ?? (user.openId === ENV.ownerOpenId ? "admin" : "user"),
+    role: user.role ?? "user",
     status: user.status ?? "active",
   };
   await db
@@ -132,6 +132,51 @@ export async function getUserByOpenId(openId: string) {
     .where(eq(users.openId, openId))
     .limit(1);
   return result[0];
+}
+
+export async function getUserById(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("PostgreSQL database is unavailable");
+  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return result[0];
+}
+
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) throw new Error("PostgreSQL database is unavailable");
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
+  return result[0];
+}
+
+export async function insertLocalUser(input: {
+  openId: string;
+  name: string;
+  email: string;
+  passwordHash: string;
+  role: string;
+}): Promise<User> {
+  const db = await getDb();
+  if (!db) throw new Error("PostgreSQL database is unavailable");
+  const result = await db
+    .insert(users)
+    .values({
+      openId: input.openId,
+      name: input.name,
+      email: input.email,
+      passwordHash: input.passwordHash,
+      loginMethod: "password",
+      role: input.role,
+      status: "active",
+      lastSignedIn: new Date(),
+    })
+    .returning();
+  const user = result[0];
+  if (!user) throw new Error("Failed to create user");
+  return user;
 }
 
 export async function closeDb() {

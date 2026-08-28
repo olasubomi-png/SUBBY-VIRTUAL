@@ -290,9 +290,20 @@
 - [x] Verify no old deployment-domain reference remains, validate port 3003 preservation, run diff checks and relevant tests
 - [x] Commit and push the verified domain correction to GitHub main without touching live VPS services
 
-# PostgreSQL audit-log migration compatibility correction
+# Self-hosted authentication replacement
 
-- [x] Add the required USING "metadata"::jsonb conversion to drizzle/0001_pink_legion.sql without changing its breakpoint, sequence, or unrelated SQL
-- [x] Add focused regression coverage for the audit-log jsonb conversion statement
-- [x] Run migration-focused validation and verify the isolated diff contains no port, domain, database-configuration, or unrelated migration changes
-- [x] Save a checkpoint, commit the verified fix, push it to GitHub main, and report the commit SHA
+- [x] Add a PostgreSQL-backed password hash field and migration while preserving existing user records and account functionality
+- [x] Replace Manus OAuth/session authentication with secure local email/password sessions and safe request authentication
+- [x] Add signup, login, logout, protected routes, rate limiting, password hashing, and initial admin bootstrap configuration
+- [x] Remove Manus-specific frontend login redirects, bearer fallbacks, OAuth routes, and obsolete environment requirements
+- [x] Update authentication UI, tests, environment documentation, and VPS deployment configuration without changing domain, port, or unrelated product behavior
+- [x] Run lint, type checks, focused auth tests, full test suite, production build, save a checkpoint, and push the implementation to GitHub
+
+# Self-hosted authentication migration continuation
+- [x] Repair frontend bootstrap and remove all remaining obsolete Manus login-helper references
+- [x] Remove stale OAuth route registration and verify server startup uses local session authentication only
+- [x] Update auth tests, environment examples, and VPS documentation for AUTH_BOOTSTRAP_ADMIN_EMAIL and JWT_SECRET
+- [x] Run lint, TypeScript checks, focused auth tests, full test suite, production build, and runtime smoke verification
+- [x] Save the final checkpoint, commit the self-hosted authentication migration, and synchronize GitHub main
+- [x] Update the migration journal regression expectation to include the new local-auth migration 0008
+- [x] Harden the local session cookie to SameSite=Lax now that cross-site OAuth is removed, with a regression assertion

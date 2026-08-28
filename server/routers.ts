@@ -1,5 +1,18 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { ONE_YEAR_MS } from "../shared/const";
+import { sdk } from "./_core/sdk";
+import {
+  getBootstrapAdminEmail,
+  hashPassword,
+  normalizeEmail,
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  verifyPassword,
+} from "./localAuth";
+import { randomUUID } from "node:crypto";
+import * as userDb from "./db";
+import { TRPCError } from "@trpc/server";
 import { systemRouter } from "./_core/systemRouter";
 import {
   adminProcedure,
@@ -68,6 +81,28 @@ import {
   listPersistentInboxes,
   writeAuditLog,
 } from "./persistence";
+function sanitizeUser(user: import("../drizzle/schema").User | null) {
+  if (!user) return null;
+  const { passwordHash: _passwordHash, ...safeUser } = user;
+  return safeUser;
+}
+
+async function setSessionCookie(
+  ctx: {
+    req: Parameters<typeof getSessionCookieOptions>[0];
+    res: { cookie: Function };
+  },
+  userId: number
+) {
+  const token = await sdk.createSessionToken(userId, {
+    expiresInMs: ONE_YEAR_MS,
+  });
+  ctx.res.cookie(COOKIE_NAME, token, {
+    ...getSessionCookieOptions(ctx.req),
+    maxAge: ONE_YEAR_MS,
+  });
+}
+
 const sms = new MockSMSProvider();
 const mail = new LocalDemoMailProvider();
 const auditEvents: AuditEvent[] = [];
@@ -75,7 +110,95 @@ const auditEvents: AuditEvent[] = [];
 export const appRouter = router({
   system: systemRouter,
   auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
+    me: publicProcedure.query(opts => sanitizeUser(opts.ctx.user)),
+    signup: publicProcedure
+      .input(
+        z.object({
+          name: z.string().trim().min(1).max(80),
+          email: z.string().trim().email().max(320),
+          password: z
+            .string()
+            .min(PASSWORD_MIN_LENGTH)
+            .max(PASSWORD_MAX_LENGTH),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const email = normalizeEmail(input.email);
+        const allowed = await checkDistributedRateLimit(
+          `auth:signup:${ctx.req.ip ?? "unknown"}:${email}`,
+          5,
+          900
+        );
+        if (!allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS" });
+        try {
+          if (await userDb.getUserByEmail(email)) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "An account with that email already exists",
+            });
+          }
+          const user = await userDb.insertLocalUser({
+            openId: `local_${randomUUID()}`,
+            name: input.name.trim(),
+            email,
+            passwordHash: await hashPassword(input.password),
+            role: getBootstrapAdminEmail() === email ? "admin" : "user",
+          });
+          await setSessionCookie(ctx, user.id);
+          return sanitizeUser(user);
+        } catch (error) {
+          if (error instanceof TRPCError) throw error;
+          console.error("[Auth] Signup failed");
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Unable to create account",
+          });
+        }
+      }),
+    login: publicProcedure
+      .input(
+        z.object({
+          email: z.string().trim().email().max(320),
+          password: z.string().min(1).max(PASSWORD_MAX_LENGTH),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const email = normalizeEmail(input.email);
+        const allowed = await checkDistributedRateLimit(
+          `auth:login:${ctx.req.ip ?? "unknown"}:${email}`,
+          10,
+          900
+        );
+        if (!allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS" });
+        try {
+          const user = await userDb.getUserByEmail(email);
+          if (!user || user.status !== "active" || !user.passwordHash) {
+            throw new TRPCError({
+              code: "UNAUTHORIZED",
+              message: "Invalid email or password",
+            });
+          }
+          if (!(await verifyPassword(input.password, user.passwordHash))) {
+            throw new TRPCError({
+              code: "UNAUTHORIZED",
+              message: "Invalid email or password",
+            });
+          }
+          await userDb.upsertUser({
+            openId: user.openId,
+            lastSignedIn: new Date(),
+          });
+          await setSessionCookie(ctx, user.id);
+          return sanitizeUser(user);
+        } catch (error) {
+          if (error instanceof TRPCError) throw error;
+          console.error("[Auth] Login failed");
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Unable to sign in",
+          });
+        }
+      }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });

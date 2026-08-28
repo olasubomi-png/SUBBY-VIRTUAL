@@ -4,7 +4,7 @@ SUBBY VIRTUAL is a compliant communications testing workspace for managing mock 
 
 ## Stack
 
-The supplied WebDev foundation provides React, Vite, Tailwind CSS, Express, tRPC, Manus OAuth, Drizzle ORM, and a managed database connection. Domain contracts are implemented in TypeScript and the current UI is mobile-first with a dark operational command-center visual system.
+The supplied WebDev foundation provides React, Vite, Tailwind CSS, Express, tRPC, Drizzle ORM, and a managed database connection. Authentication is self-hosted with email/password credentials, scrypt password hashes, and HTTP-only JWT session cookies. Domain contracts are implemented in TypeScript and the current UI is mobile-first with a dark operational command-center visual system.
 
 ## Commands
 
@@ -16,7 +16,7 @@ pnpm test
 pnpm build
 ```
 
-The preview is available at the URL printed by the development server. Authentication uses the scaffold's secure Manus OAuth session flow. In a production deployment, configure the supplied environment variables through the hosting platform's secret manager; never commit `.env` files or provider credentials.
+The preview is available at the URL printed by the development server. Authentication uses the local email/password flow. Configure `DATABASE_URL`, `JWT_SECRET`, and `AUTH_BOOTSTRAP_ADMIN_EMAIL` through the VPS secret manager or a protected `.env` file; never commit `.env` files or provider credentials. See [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) and [`docs/VPS_DEPLOYMENT.md`](docs/VPS_DEPLOYMENT.md).
 
 ## Phase 1 capabilities
 
@@ -24,7 +24,7 @@ Customers can review an available NGN balance, inspect immutable-style ledger ac
 
 ## Ubuntu VPS foundation
 
-For a VPS, install Node.js 22+, pnpm, Docker, and Docker Compose. Clone the private repository, copy the environment templates into a secret-managed runtime environment, start PostgreSQL/Redis with `docker compose up -d`, run `pnpm install`, verify with `pnpm check`, `pnpm test`, and `pnpm build`, then run `pnpm dev` for development or `pnpm start` after the production build. Put a TLS reverse proxy in front of the Node process and restrict database/Redis ports to the private network.
+For a VPS, install Node.js 22+, pnpm, Docker, and Docker Compose. Clone the repository, copy the environment templates into a secret-managed runtime environment, start PostgreSQL/Redis with `docker compose up -d`, run `pnpm install`, verify with `pnpm check`, `pnpm test`, and `pnpm build`, then run `pnpm dev` for development or `pnpm start` after the production build. Put a TLS reverse proxy in front of the Node process and restrict database/Redis ports to the private network.
 
 ## Phase 2 deferred
 

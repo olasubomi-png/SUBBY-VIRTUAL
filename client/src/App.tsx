@@ -7,10 +7,11 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { ShieldCheck } from "lucide-react";
+import { LocalAuthCard } from "./components/LocalAuthCard";
 import { useLocation } from "wouter";
 
 function ProtectedWorkspace() {
-  const { user, loading } = useAuth({ redirectOnUnauthenticated: true });
+  const { user, loading } = useAuth();
   const [location] = useLocation();
   if (loading)
     return (
@@ -18,7 +19,13 @@ function ProtectedWorkspace() {
         Loading secure workspace…
       </div>
     );
-  if (location === "/admin" && user?.role !== "admin")
+  if (!user)
+    return (
+      <div className="grid min-h-screen place-items-center bg-[#080a0f] p-6">
+        <LocalAuthCard />
+      </div>
+    );
+  if (location === "/admin" && user.role !== "admin")
     return (
       <div className="grid min-h-screen place-items-center bg-[#080a0f] p-6 text-center">
         <div>

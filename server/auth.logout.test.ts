@@ -21,7 +21,8 @@ function createAuthContext(): {
     openId: "sample-user",
     email: "sample@example.com",
     name: "Sample User",
-    loginMethod: "manus",
+    passwordHash: "scrypt$16384$8$1$salt$hash",
+    loginMethod: "password",
     role: "user",
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -45,6 +46,20 @@ function createAuthContext(): {
 }
 
 describe("auth.logout", () => {
+  it("returns the current user without exposing passwordHash", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+
+    const result = await caller.auth.me();
+
+    expect(result).toMatchObject({
+      id: 1,
+      email: "sample@example.com",
+      loginMethod: "password",
+    });
+    expect(result).not.toHaveProperty("passwordHash");
+  });
+
   it("clears the session cookie and reports success", async () => {
     const { ctx, clearedCookies } = createAuthContext();
     const caller = appRouter.createCaller(ctx);
@@ -57,7 +72,7 @@ describe("auth.logout", () => {
     expect(clearedCookies[0]?.options).toMatchObject({
       maxAge: -1,
       secure: true,
-      sameSite: "none",
+      sameSite: "lax",
       httpOnly: true,
       path: "/",
     });
