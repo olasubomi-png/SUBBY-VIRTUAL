@@ -23,6 +23,8 @@ describe("VPS deployment artifacts", () => {
       /VITE_APP_ID|VITE_OAUTH_PORTAL_URL|OAUTH_SERVER_URL|OWNER_OPEN_ID/
     );
     expect(template).toContain("REPLACE_WITH_STRONG_PASSWORD");
+    expect(template).toContain("SMS_PROVIDER=mock");
+    expect(template).toContain("SMS_PROVIDER_BASE_URL=");
     expect(template).not.toContain("postgresql://subby_app:actual-password@");
   });
 

@@ -21,7 +21,8 @@ import {
   router,
 } from "./_core/trpc";
 import { z } from "zod";
-import { LocalDemoMailProvider, MockSMSProvider } from "./domain";
+import { LocalDemoMailProvider } from "./domain";
+import { getConfiguredSmsProvider } from "./providers";
 import {
   cancelSmsOrder,
   createSmsOrder,
@@ -109,8 +110,11 @@ async function setSessionCookie(
   });
 }
 
-const sms = new MockSMSProvider();
 const mail = new LocalDemoMailProvider();
+/** Resolved per call so SMS_PROVIDER env changes are honored without process restart in tests. */
+function sms() {
+  return getConfiguredSmsProvider();
+}
 const auditEvents: AuditEvent[] = [];
 
 export const appRouter = router({
@@ -345,9 +349,9 @@ export const appRouter = router({
         return expireInbox(ctx.user.id, input.id);
       }),
     smsOptions: protectedProcedure.query(async () => ({
-      countries: await sms.getCountries(),
-      services: await sms.getServices(),
-      pricing: await sms.getPricing(),
+      countries: await sms().getCountries(),
+      services: await sms().getServices(),
+      pricing: await sms().getPricing(),
     })),
     createSmsRequest: protectedProcedure
       .input(
@@ -368,7 +372,7 @@ export const appRouter = router({
             country: input.country,
             serviceId: input.serviceId,
             idempotencyKey: input.idempotencyKey,
-            provider: sms,
+            provider: sms(),
             providerType: "MOCK",
           });
           if (shouldUsePersistentStore() && !result.reused) {

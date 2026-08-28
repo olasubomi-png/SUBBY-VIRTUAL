@@ -6,21 +6,38 @@ import { canReceiveResourceEvent, createRealtimeEvent } from "./realtime";
 
 describe("platform foundations", () => {
   it("exposes only safe mock providers by default", async () => {
+    providerRegistry.clearSmsCache();
     expect(providerRegistry.getSMS()).toBeDefined();
     expect(providerRegistry.getMail()).toBeDefined();
-    const health = await providerRegistry.health();
-    expect(health.sms[0]?.mode).toBe("mock");
-    expect(health.mail[0]?.mode).toBe("mock");
+    const health = await providerRegistry.health({});
+    expect(health.sms.ok).toBe(true);
+    expect(health.mail.ok).toBe(true);
+    expect(health.config.mode).toBe("mock");
   });
 
-  it("rejects production provider credentials during Phase 1", () => {
-    const previous = process.env.SMS_PROVIDER_API_KEY;
-    process.env.SMS_PROVIDER_API_KEY = "disabled-test-key";
-    expect(() => providerRegistry.validateConfiguration()).toThrow(
-      "disabled in Phase 1"
-    );
-    if (previous === undefined) delete process.env.SMS_PROVIDER_API_KEY;
-    else process.env.SMS_PROVIDER_API_KEY = previous;
+  it("keeps mock SMS provider as the safe default configuration", () => {
+    const previousProvider = process.env.SMS_PROVIDER;
+    const previousKey = process.env.SMS_PROVIDER_API_KEY;
+    delete process.env.SMS_PROVIDER;
+    delete process.env.SMS_PROVIDER_API_KEY;
+    providerRegistry.clearSmsCache();
+    const config = providerRegistry.validateConfiguration();
+    expect(config.mode).toBe("mock");
+    expect(providerRegistry.getSMS()).toBeDefined();
+    if (previousProvider === undefined) delete process.env.SMS_PROVIDER;
+    else process.env.SMS_PROVIDER = previousProvider;
+    if (previousKey === undefined) delete process.env.SMS_PROVIDER_API_KEY;
+    else process.env.SMS_PROVIDER_API_KEY = previousKey;
+    providerRegistry.clearSmsCache();
+  });
+
+  it("rejects incomplete external SMS configuration without mock fallback", () => {
+    expect(() =>
+      providerRegistry.validateConfiguration({
+        SMS_PROVIDER: "external",
+        SMS_PROVIDER_API_KEY: "partial-only",
+      })
+    ).toThrow(/incomplete/);
   });
 
   it("fails persistence helpers clearly when PostgreSQL is not configured", async () => {
