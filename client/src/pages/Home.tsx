@@ -565,14 +565,23 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
                     onChange={e => setServiceId(e.target.value)}
                     className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0a0c12] px-3 text-sm text-slate-200"
                   >
-                    {smsOptions.data?.services.map(service => (
+                    {smsOptions.data?.services.map(service => {
+                      const quote = smsOptions.data.pricing.find(
+                        p =>
+                          p.serviceId === service.id &&
+                          (p as { countryCode?: string }).countryCode ===
+                            country &&
+                          (p as { available?: boolean }).available !== false
+                      ) ?? smsOptions.data.pricing.find(
+                        p => p.serviceId === service.id
+                      );
+                      return (
                       <option key={service.id} value={service.id}>
                         {service.name} · ₦
-                        {smsOptions.data.pricing.find(
-                          p => p.serviceId === service.id
-                        )?.amount ?? 0}
+                        {quote?.amount ?? 0}
                       </option>
-                    ))}
+                      );
+                    })}
                   </select>
                 </label>
                 <Button

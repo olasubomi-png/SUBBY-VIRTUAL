@@ -49,9 +49,34 @@ The SMS-Activate-compatible API uses **polling** (`getStatus`), not webhooks.
 
 Webhook support is not required for this adapter. A future provider that supports signed webhooks can be added without rewriting order logic.
 
+## Live catalog (external mode)
+
+External mode loads prices via the provider `getPrices` action and normalizes them into SUBBY catalog entries (country, service, availability, retail price).
+
+- Unmapped provider countries/services are skipped (not fabricated).
+- `count = 0` → unavailable (purchase rejected).
+- Catalog cache TTL: **60 seconds**.
+- Cache is provider-isolated; force refresh available for admin/ops.
+- Refresh failure fails closed (no mock fallback, no invented prices).
+
+## Pricing model
+
+```
+provider major cost
+  → integer provider cents (2 d.p., ceil residuals)
+  → wallet minor via SMS_FX_MINOR_PER_PROVIDER_MAJOR (ceil)
+  → retail = cost × (10000 + SMS_MARKUP_BPS) / 10000 (ceil)
+```
+
+- `SMS_MARKUP_BPS` — basis points (1000 = 10%). Default 0.
+- `SMS_FX_MINOR_PER_PROVIDER_MAJOR` — wallet minor units per 1.00 provider major (default 160000).
+- Ordinary users see **retail** only; provider cost is internal.
+- Each order snapshots `quotedPriceMinor`, `providerCostMinor`, `pricingVersion`, `markupBps`.
+
 ## Billing
 
 - Server-side catalog prices only (never trust the client).
+- Purchase re-resolves catalog at submit time (not the UI display).
 - Atomic debit + order create with idempotency key.
 - Allocation failure → order `failed` + **refund** of the debit (idempotent refund reference).
 - Cancellation uses existing financial rules; provider release is best-effort.
@@ -85,5 +110,5 @@ Webhook support is not required for this adapter. A future provider that support
 ## Limitations
 
 - Single external adapter in this step (SMS-Activate-compatible).
-- Pricing for external mode currently reuses the internal NGN catalog table for billing consistency; live provider retail prices may differ from catalog quotes.
+- External retail prices are derived from live provider costs + markup; mock mode keeps the static demo catalog.
 - No payment-gateway integration in this step.

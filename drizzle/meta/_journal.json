@@ -71,6 +71,13 @@
       "when": 1787900000000,
       "tag": "0009_sms_order_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787910000000,
+      "tag": "0010_sms_price_snapshot",
+      "breakpoints": true
     }
   ]
 }

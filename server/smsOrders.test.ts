@@ -73,7 +73,7 @@ describe("SMS order creation", () => {
         idempotencyKey: "33333333-3333-4333-8333-333333333333",
         provider,
       })
-    ).rejects.toThrow("Unknown SMS country");
+    ).rejects.toThrow(/Unknown SMS country|Service not available/);
     await expect(
       createSmsOrder({
         userId: 44,
@@ -82,7 +82,7 @@ describe("SMS order creation", () => {
         idempotencyKey: "44444444-4444-4444-8444-444444444444",
         provider,
       })
-    ).rejects.toThrow("Unknown SMS service");
+    ).rejects.toThrow(/Unknown SMS|Service not available/);
   });
 
   it("enforces server-side pricing from the catalog", async () => {

@@ -6,6 +6,8 @@ import {
   SmsProviderError,
 } from "./smsProviderErrors";
 import { providerStatusToCanonicalTarget } from "./smsProviderMapping";
+import { resolvePriceQuote } from "./smsCatalog";
+import { parseMarkupBps } from "./smsPricing";
 import {
   assertSmsOrderTransition,
   isTerminalSmsOrderStatus,
@@ -93,18 +95,12 @@ async function createDemoOrder(input: CreateSmsOrderInput): Promise<{
   walletBalanceMinor: number;
   reused: boolean;
 }> {
-  const countries = await input.provider.getCountries();
-  if (!countries.some(c => c.code === input.country)) {
-    throw new Error("Unknown SMS country");
-  }
-  const services = await input.provider.getServices();
-  if (!services.some(s => s.id === input.serviceId)) {
-    throw new Error("Unknown SMS service");
-  }
-  const pricing = await input.provider.getPricing();
-  const quote = pricing.find(p => p.serviceId === input.serviceId);
-  if (!quote) throw new Error("Unknown SMS service");
-  if (quote.currency !== "NGN" && quote.currency !== "USD") {
+  const priceQuote = await resolvePriceQuote(
+    input.provider,
+    input.country,
+    input.serviceId
+  );
+  if (priceQuote.currency !== "NGN" && priceQuote.currency !== "USD") {
     throw new Error("Invalid currency");
   }
 
@@ -120,15 +116,15 @@ async function createDemoOrder(input: CreateSmsOrderInput): Promise<{
   }
 
   const wallet = getDemoWallet(input.userId);
-  if (wallet.balanceMinor < quote.amount) {
+  if (wallet.balanceMinor < priceQuote.retailPriceMinor) {
     throw new Error("Insufficient balance");
   }
 
   const debitRef = `sms-order-${input.userId}-${input.idempotencyKey}`;
   debitDemoCredits(
     input.userId,
-    quote.amount,
-    `${quote.serviceId} SMS activation`,
+    priceQuote.retailPriceMinor,
+    `${priceQuote.serviceId} SMS activation`,
     debitRef
   );
 
@@ -136,11 +132,15 @@ async function createDemoOrder(input: CreateSmsOrderInput): Promise<{
     userId: input.userId,
     country: input.country,
     serviceId: input.serviceId,
-    priceMinor: quote.amount,
-    currency: quote.currency,
+    priceMinor: priceQuote.retailPriceMinor,
+    currency: priceQuote.currency,
     idempotencyKey: input.idempotencyKey,
     status: "pending",
   });
+  (order as { providerCostMinor?: number }).providerCostMinor =
+    priceQuote.providerCostMinor;
+  (order as { pricingVersion?: string }).pricingVersion =
+    priceQuote.pricingVersion;
 
   try {
     order = transitionDemoOrder(order.id, input.userId, "allocating");
@@ -160,7 +160,11 @@ async function createDemoOrder(input: CreateSmsOrderInput): Promise<{
       // ignore transition race
     }
     try {
-      await refundSmsAllocation(input.userId, quote.amount, input.idempotencyKey);
+      await refundSmsAllocation(
+        input.userId,
+        priceQuote.retailPriceMinor,
+        input.idempotencyKey
+      );
     } catch {
       // refund best-effort; debit reference remains for audit
     }
@@ -204,18 +208,12 @@ async function createPersistentOrder(input: CreateSmsOrderInput): Promise<{
   walletBalanceMinor: number;
   reused: boolean;
 }> {
-  const countries = await input.provider.getCountries();
-  if (!countries.some(c => c.code === input.country)) {
-    throw new Error("Unknown SMS country");
-  }
-  const services = await input.provider.getServices();
-  if (!services.some(s => s.id === input.serviceId)) {
-    throw new Error("Unknown SMS service");
-  }
-  const pricing = await input.provider.getPricing();
-  const quote = pricing.find(p => p.serviceId === input.serviceId);
-  if (!quote) throw new Error("Unknown SMS service");
-  if (quote.currency !== "NGN" && quote.currency !== "USD") {
+  const priceQuote = await resolvePriceQuote(
+    input.provider,
+    input.country,
+    input.serviceId
+  );
+  if (priceQuote.currency !== "NGN" && priceQuote.currency !== "USD") {
     throw new Error("Invalid currency");
   }
 
@@ -245,11 +243,14 @@ async function createPersistentOrder(input: CreateSmsOrderInput): Promise<{
     providerType: input.providerType ?? "MOCK",
     countryCode: input.country,
     serviceId: input.serviceId,
-    quotedPriceMinor: quote.amount,
-    currency: quote.currency,
+    quotedPriceMinor: priceQuote.retailPriceMinor,
+    providerCostMinor: priceQuote.providerCostMinor,
+    pricingVersion: priceQuote.pricingVersion,
+    markupBps: parseMarkupBps(process.env.SMS_MARKUP_BPS),
+    currency: priceQuote.currency,
     status: "pending",
     expiresAt,
-    debitReason: `${quote.serviceId} SMS activation`,
+    debitReason: `${priceQuote.serviceId} SMS activation`,
     debitReference: `sms-order-${input.userId}-${input.idempotencyKey}`,
   };
 
@@ -320,7 +321,7 @@ async function createPersistentOrder(input: CreateSmsOrderInput): Promise<{
     try {
       await refundSmsAllocation(
         input.userId,
-        quote.amount,
+        priceQuote.retailPriceMinor,
         input.idempotencyKey
       );
     } catch {

@@ -34,6 +34,11 @@ import {
   pollSmsOrderCode,
 } from "./smsOrders";
 import { providerRegistry } from "./providers";
+import {
+  getCatalogCacheStatus,
+  getCatalogSnapshot,
+  toPublicCatalog,
+} from "./smsCatalog";
 import type { DemoActivation, DemoInbox } from "./demoState";
 import { createAuditEvent, type AuditEvent } from "./security";
 import { checkDistributedRateLimit } from "./redis";
@@ -377,11 +382,44 @@ export const appRouter = router({
           return expirePersistentInbox(ctx.user.id, input.id);
         return expireInbox(ctx.user.id, input.id);
       }),
-    smsOptions: protectedProcedure.query(async () => ({
-      countries: await sms().getCountries(),
-      services: await sms().getServices(),
-      pricing: await sms().getPricing(),
-    })),
+    smsOptions: protectedProcedure.query(async () => {
+      const provider = sms();
+      const snapshot = await getCatalogSnapshot(provider);
+      const publicEntries = toPublicCatalog(snapshot.entries);
+      const countriesMap = new Map<string, string>();
+      const servicesMap = new Map<string, string>();
+      const pricing: Array<{
+        serviceId: string;
+        countryCode: string;
+        amount: number;
+        currency: string;
+        available: boolean;
+      }> = [];
+      for (const entry of publicEntries) {
+        countriesMap.set(entry.countryCode, entry.countryName);
+        servicesMap.set(entry.serviceId, entry.serviceName);
+        pricing.push({
+          serviceId: entry.serviceId,
+          countryCode: entry.countryCode,
+          amount: entry.retailPriceMinor,
+          currency: entry.currency,
+          available: entry.available,
+        });
+      }
+      return {
+        countries: [...countriesMap.entries()].map(([code, name]) => ({
+          code,
+          name,
+        })),
+        services: [...servicesMap.entries()].map(([id, name]) => ({
+          id,
+          name,
+        })),
+        pricing,
+        catalogVersion: snapshot.version,
+        // provider cost intentionally omitted
+      };
+    }),
     createSmsRequest: protectedProcedure
       .input(
         z.object({
@@ -698,7 +736,12 @@ export const appRouter = router({
     databaseHealth: adminProcedure.query(() => getDatabaseHealth()),
     providerHealth: adminProcedure.query(async () => {
       const health = await providerRegistry.health();
-      // Never include secrets — describe() already redacts
+      let catalog;
+      try {
+        catalog = getCatalogCacheStatus();
+      } catch {
+        catalog = { mode: "invalid", cached: false };
+      }
       return {
         sms: {
           ok: health.sms.ok,
@@ -710,6 +753,7 @@ export const appRouter = router({
         },
         mail: { ok: health.mail.ok, detail: health.mail.detail },
         config: health.config,
+        catalog,
       };
     }),
     overview: adminProcedure.query(async () => {

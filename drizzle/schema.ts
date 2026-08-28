@@ -136,6 +136,9 @@ export const smsActivations = pgTable(
     quotedPriceMinor: bigint("quotedPriceMinor", { mode: "number" })
       .notNull()
       .default(0),
+    providerCostMinor: bigint("providerCostMinor", { mode: "number" }).default(0),
+    pricingVersion: varchar("pricingVersion", { length: 120 }),
+    markupBps: integer("markupBps").default(0),
     currency: varchar("currency", { length: 3 }).notNull().default("NGN"),
     idempotencyKey: varchar("idempotencyKey", { length: 120 }),
     providerReference: varchar("providerReference", { length: 120 }),

@@ -268,33 +268,26 @@ export class ExternalSmsProvider implements SMSProvider {
   }
 
   /**
-   * Pricing for external mode: use configured catalog amounts from env is not
-   * available — return stable placeholder majors converted to minor units using
-   * the same NGN-oriented catalog the mock uses for continuity, so server-side
-   * pricing remains authoritative and non-zero.
-   * Live operators should set SMS_PROVIDER catalog overrides in a future step;
-   * for now we keep the existing mock price table as the billing source of truth.
+   * Legacy flat pricing list. Prefer the catalog service for authoritative
+   * retail prices. This method remains for interface compatibility and returns
+   * an empty list so callers do not silently use mock amounts in external mode.
    */
-  async getPricing() {
-    const table: Array<{ serviceId: string; amount: number; currency: Currency }> =
-      [
-        { serviceId: "verify", amount: 15000, currency: DEFAULT_CURRENCY },
-        { serviceId: "whatsapp", amount: 15000, currency: DEFAULT_CURRENCY },
-        { serviceId: "telegram", amount: 12000, currency: DEFAULT_CURRENCY },
-        { serviceId: "google", amount: 18000, currency: DEFAULT_CURRENCY },
-        { serviceId: "facebook", amount: 14000, currency: DEFAULT_CURRENCY },
-        { serviceId: "instagram", amount: 14000, currency: DEFAULT_CURRENCY },
-        { serviceId: "tiktok", amount: 16000, currency: DEFAULT_CURRENCY },
-        { serviceId: "twitter", amount: 15000, currency: DEFAULT_CURRENCY },
-        { serviceId: "discord", amount: 13000, currency: DEFAULT_CURRENCY },
-        { serviceId: "uber", amount: 17000, currency: DEFAULT_CURRENCY },
-        { serviceId: "amazon", amount: 16000, currency: DEFAULT_CURRENCY },
-        { serviceId: "sandbox", amount: 10000, currency: DEFAULT_CURRENCY },
-      ];
-    return table;
+  async getPricing(): Promise<
+    Array<{ serviceId: string; amount: number; currency: Currency }>
+  > {
+    return [];
+  }
+
+  /**
+   * Raw getPrices JSON from the SMS-Activate-compatible API.
+   * Used by the catalog layer for live provider cost + availability.
+   */
+  async fetchPricesJson(): Promise<string> {
+    return this.request({ action: "getPrices" });
   }
 
   async buyActivation(input: {
+
     userId: number;
     country: string;
     serviceId: string;

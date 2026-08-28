@@ -146,24 +146,21 @@ describe("SMS provider registry selection", () => {
     expect(provider).toBeInstanceOf(ExternalSmsProvider);
   });
 
-  it("external adapter serves catalog offline and fails closed on network ops without a live upstream", async () => {
+  it("external adapter fails closed on network ops without a live upstream", async () => {
     const provider = getConfiguredSmsProvider({
       SMS_PROVIDER: "external",
       SMS_PROVIDER_BASE_URL: "https://sms.example.invalid",
       SMS_PROVIDER_API_KEY: "test-key",
     });
-    // Catalog is mapped locally — no network required
+    // Local mapping still works offline
     await expect(provider.getCountries()).resolves.toEqual(
       expect.arrayContaining([expect.objectContaining({ code: "NG" })])
     );
     await expect(provider.getServices()).resolves.toEqual(
       expect.arrayContaining([expect.objectContaining({ id: "whatsapp" })])
     );
-    await expect(provider.getPricing()).resolves.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ serviceId: "whatsapp", currency: "NGN" }),
-      ])
-    );
+    // Live pricing is empty at the provider interface — catalog service is authoritative
+    await expect(provider.getPricing()).resolves.toEqual([]);
     // Network operations fail closed (unreachable host)
     await expect(
       provider.buyActivation({

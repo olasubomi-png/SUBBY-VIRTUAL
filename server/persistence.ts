@@ -1516,6 +1516,9 @@ export type CreateSmsOrderAtomicInput = {
   countryCode: string;
   serviceId: string;
   quotedPriceMinor: number;
+  providerCostMinor?: number;
+  pricingVersion?: string;
+  markupBps?: number;
   currency: "NGN" | "USD";
   status: string;
   expiresAt: Date;
@@ -1595,6 +1598,9 @@ export async function createSmsOrderAtomic(input: CreateSmsOrderAtomicInput) {
         serviceId: input.serviceId,
         status: input.status,
         quotedPriceMinor: input.quotedPriceMinor,
+        providerCostMinor: input.providerCostMinor ?? 0,
+        pricingVersion: input.pricingVersion,
+        markupBps: input.markupBps ?? 0,
         currency: input.currency,
         idempotencyKey: input.idempotencyKey,
         expiresAt: input.expiresAt,
