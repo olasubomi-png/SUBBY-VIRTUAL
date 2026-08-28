@@ -254,7 +254,7 @@ export class MockSMSProvider implements SMSProvider {
 
   async getServices() {
     return [
-      { id: "verify", name: "WhatsApp" },
+      { id: "verify", name: "Verification (legacy)" },
       { id: "whatsapp", name: "WhatsApp" },
       { id: "telegram", name: "Telegram" },
       { id: "google", name: "Google" },
