@@ -230,7 +230,7 @@ describe("provider failure handling", () => {
         idempotencyKey: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
         provider: failingProvider,
       })
-    ).rejects.toThrow("Unable to allocate SMS number");
+    ).rejects.toThrow(/Unable to complete the SMS provider request|Unable to allocate/);
 
     const stored = listActivations(60);
     expect(stored).toHaveLength(1);
@@ -257,10 +257,14 @@ describe("provider failure handling", () => {
       /terminal/
     );
 
-    // Debit happens once before provider call (atomic create+debit).
+    // Debit once, then refund once on allocation failure
     expect(getDemoWallet(60).ledger.filter(e => e.type === "DEBIT")).toHaveLength(
       1
     );
+    expect(getDemoWallet(60).ledger.filter(e => e.type === "CREDIT").length).toBeGreaterThanOrEqual(
+      2
+    ); // seed + refund
+    expect(getDemoWallet(60).balanceMinor).toBe(50000);
 
     const listed = await listSmsOrders(60);
     expect(listed[0].status).toBe("failed");

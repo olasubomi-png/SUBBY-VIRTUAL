@@ -31,7 +31,9 @@ import {
   createSmsOrder,
   getSmsOrder,
   listSmsOrders,
+  pollSmsOrderCode,
 } from "./smsOrders";
+import { providerRegistry } from "./providers";
 import type { DemoActivation, DemoInbox } from "./demoState";
 import { createAuditEvent, type AuditEvent } from "./security";
 import { checkDistributedRateLimit } from "./redis";
@@ -311,7 +313,7 @@ export const appRouter = router({
       .input(z.object({ id: z.string().min(1).max(120) }))
       .mutation(async ({ input, ctx }) => {
         try {
-          return await cancelSmsOrder(ctx.user.id, input.id);
+          return await cancelSmsOrder(ctx.user.id, input.id, sms());
         } catch (error) {
           if (error instanceof Error) {
             const safe = new Set([
@@ -328,6 +330,26 @@ export const appRouter = router({
               throw error;
           }
           throw new Error("Unable to cancel SMS order");
+        }
+      }),
+    pollSms: protectedProcedure
+      .input(z.object({ id: z.string().min(1).max(120) }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await pollSmsOrderCode(ctx.user.id, input.id, sms());
+        } catch (error) {
+          if (error instanceof Error) {
+            if (
+              error.message === "Activation not found" ||
+              error.message === "SMS order is not awaiting a verification code" ||
+              error.message === "SMS order has no provider reference" ||
+              error.message.startsWith("Invalid SMS order transition") ||
+              error.message.startsWith("SMS order is terminal")
+            ) {
+              throw error;
+            }
+          }
+          throw new Error("Unable to poll SMS order");
         }
       }),
     mailInboxes: protectedProcedure.query(async ({ ctx }) =>
@@ -674,6 +696,22 @@ export const appRouter = router({
         .mutation(({ input }) => dispatchQueuedJobs(input.limit)),
     }),
     databaseHealth: adminProcedure.query(() => getDatabaseHealth()),
+    providerHealth: adminProcedure.query(async () => {
+      const health = await providerRegistry.health();
+      // Never include secrets — describe() already redacts
+      return {
+        sms: {
+          ok: health.sms.ok,
+          detail: health.sms.detail,
+          balanceMajor:
+            "balanceMajor" in health.sms
+              ? (health.sms as { balanceMajor?: number }).balanceMajor
+              : undefined,
+        },
+        mail: { ok: health.mail.ok, detail: health.mail.detail },
+        config: health.config,
+      };
+    }),
     overview: adminProcedure.query(async () => {
       const persistent = shouldUsePersistentStore()
         ? await getAdminMetrics()

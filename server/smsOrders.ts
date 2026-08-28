@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { SMSProvider } from "./domain";
+import { ExternalSmsProvider } from "./externalSmsProvider";
+import {
+  safeSmsProviderClientMessage,
+  SmsProviderError,
+} from "./smsProviderErrors";
+import { providerStatusToCanonicalTarget } from "./smsProviderMapping";
 import {
   assertSmsOrderTransition,
   isTerminalSmsOrderStatus,
@@ -33,6 +39,21 @@ import {
 } from "./persistence";
 
 const DEFAULT_TTL_MS = 30 * 60_000;
+
+async function refundSmsAllocation(
+  userId: number,
+  amountMinor: number,
+  idempotencyKey: string
+) {
+  const reference = `sms-refund-${userId}-${idempotencyKey}`;
+  if (shouldUsePersistentStore()) {
+    const { creditPersistentWallet } = await import("./persistence");
+    await creditPersistentWallet(userId, amountMinor, reference);
+  } else {
+    addDemoCredits(userId, amountMinor, reference);
+  }
+}
+
 
 export type CreateSmsOrderInput = {
   userId: number;
@@ -132,9 +153,18 @@ async function createDemoOrder(input: CreateSmsOrderInput): Promise<{
       phoneNumber: providerResult.phoneNumber,
       providerReference: providerResult.id,
     });
-  } catch {
-    transitionDemoOrder(order.id, input.userId, "failed");
-    throw new Error("Unable to allocate SMS number");
+  } catch (error) {
+    try {
+      transitionDemoOrder(order.id, input.userId, "failed");
+    } catch {
+      // ignore transition race
+    }
+    try {
+      await refundSmsAllocation(input.userId, quote.amount, input.idempotencyKey);
+    } catch {
+      // refund best-effort; debit reference remains for audit
+    }
+    throw new Error(safeSmsProviderClientMessage(error));
   }
 
   return {
@@ -277,7 +307,7 @@ async function createPersistentOrder(input: CreateSmsOrderInput): Promise<{
       phoneNumber: providerResult.phoneNumber,
       providerReference: providerResult.id,
     });
-  } catch {
+  } catch (error) {
     try {
       await transitionPersistentSmsOrder({
         userId: input.userId,
@@ -287,7 +317,16 @@ async function createPersistentOrder(input: CreateSmsOrderInput): Promise<{
     } catch {
       // ignore secondary failure
     }
-    throw new Error("Unable to allocate SMS number");
+    try {
+      await refundSmsAllocation(
+        input.userId,
+        quote.amount,
+        input.idempotencyKey
+      );
+    } catch {
+      // refund best-effort
+    }
+    throw new Error(safeSmsProviderClientMessage(error));
   }
 
   const detail = await getPersistentActivation(input.userId, created.order.id);
@@ -374,7 +413,11 @@ export async function listSmsOrders(userId: number) {
   return listDemoActivations(userId).map(item => toPublicSmsOrder(demoToOrder(item)));
 }
 
-export async function cancelSmsOrder(userId: number, id: string) {
+export async function cancelSmsOrder(
+  userId: number,
+  id: string,
+  provider?: SMSProvider
+) {
   if (shouldUsePersistentStore()) {
     const current = await getPersistentActivation(userId, id);
     const from = normalizeSmsOrderStatus(current.status);
@@ -382,12 +425,29 @@ export async function cancelSmsOrder(userId: number, id: string) {
       throw new Error("SMS order is terminal and cannot be cancelled");
     }
     assertSmsOrderTransition(from, "cancelled");
+    const providerRef =
+      (current as { providerReference?: string }).providerReference ??
+      undefined;
+    if (provider && providerRef) {
+      try {
+        await provider.cancelActivation(providerRef);
+      } catch {
+        // Still cancel locally; provider release is best-effort
+      }
+    }
     await cancelPersistentActivation(userId, id);
     return getSmsOrder(userId, id);
   }
   const item = getDemoActivation(userId, id);
   const from = normalizeSmsOrderStatus(item.status);
   assertSmsOrderTransition(from, "cancelled");
+  if (provider && item.providerReference) {
+    try {
+      await provider.cancelActivation(item.providerReference);
+    } catch {
+      // best-effort
+    }
+  }
   cancelDemoSms(userId, id);
   item.status = "cancelled" as DemoActivation["status"];
   item.cancelledAt = new Date().toISOString();
@@ -453,4 +513,72 @@ export function seedDemoCreditsForTests(
   reference = `seed-${randomUUID()}`
 ) {
   return addDemoCredits(userId, amountMinor, reference);
+}
+
+
+/**
+ * Poll the active SMS provider once for a verification code.
+ * Bounded, idempotent, ownership-checked. Does not run unbounded loops.
+ */
+export async function pollSmsOrderCode(
+  userId: number,
+  id: string,
+  provider: SMSProvider
+) {
+  const order = await getSmsOrder(userId, id);
+  const status = normalizeSmsOrderStatus(order.status);
+  if (isTerminalSmsOrderStatus(status)) {
+    return order;
+  }
+  if (status !== "active" && status !== "code_received") {
+    throw new Error("SMS order is not awaiting a verification code");
+  }
+
+  const providerRef =
+    (order as { providerReference?: string }).providerReference ??
+    (shouldUsePersistentStore()
+      ? undefined
+      : getDemoActivation(userId, id).providerReference);
+
+  // Mock path: no provider reference required; simulation remains via jobs
+  if (!providerRef) {
+    if (provider instanceof ExternalSmsProvider) {
+      throw new Error("SMS order has no provider reference");
+    }
+    return order;
+  }
+
+  const remote = await provider.getStatus(providerRef);
+  const target = providerStatusToCanonicalTarget(remote.status);
+  if (!target) {
+    return order;
+  }
+  if (target === "code_received" && remote.code) {
+    return markSmsCodeReceived(userId, id, remote.code);
+  }
+  if (target === "cancelled") {
+    return cancelSmsOrder(userId, id, provider);
+  }
+  return order;
+}
+
+export async function expireSmsOrderWithProvider(
+  userId: number,
+  id: string,
+  provider?: SMSProvider
+) {
+  const order = await getSmsOrder(userId, id);
+  const providerRef =
+    (order as { providerReference?: string }).providerReference ??
+    (!shouldUsePersistentStore()
+      ? getDemoActivation(userId, id).providerReference
+      : undefined);
+  if (provider && providerRef) {
+    try {
+      await provider.cancelActivation(providerRef);
+    } catch {
+      // best-effort release
+    }
+  }
+  return expireSmsOrder(userId, id);
 }

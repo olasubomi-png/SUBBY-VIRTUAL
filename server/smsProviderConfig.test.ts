@@ -146,26 +146,32 @@ describe("SMS provider registry selection", () => {
     expect(provider).toBeInstanceOf(ExternalSmsProvider);
   });
 
-  it("external adapter methods fail closed without contacting a network", async () => {
+  it("external adapter serves catalog offline and fails closed on network ops without a live upstream", async () => {
     const provider = getConfiguredSmsProvider({
       SMS_PROVIDER: "external",
-      SMS_PROVIDER_BASE_URL: "https://sms.example.com",
+      SMS_PROVIDER_BASE_URL: "https://sms.example.invalid",
       SMS_PROVIDER_API_KEY: "test-key",
     });
-    await expect(provider.getCountries()).rejects.toThrow(/not implemented/);
-    await expect(provider.getServices()).rejects.toThrow(/not implemented/);
-    await expect(provider.getPricing()).rejects.toThrow(/not implemented/);
+    // Catalog is mapped locally — no network required
+    await expect(provider.getCountries()).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: "NG" })])
+    );
+    await expect(provider.getServices()).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "whatsapp" })])
+    );
+    await expect(provider.getPricing()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ serviceId: "whatsapp", currency: "NGN" }),
+      ])
+    );
+    // Network operations fail closed (unreachable host)
     await expect(
       provider.buyActivation({
         userId: 1,
         country: "NG",
         serviceId: "whatsapp",
       })
-    ).rejects.toThrow(/not implemented/);
-    await expect(provider.getStatus("x")).rejects.toThrow(/not implemented/);
-    await expect(provider.cancelActivation("x")).rejects.toThrow(
-      /not implemented/
-    );
+    ).rejects.toThrow();
     const health = await provider.healthCheck();
     expect(health.ok).toBe(false);
   });

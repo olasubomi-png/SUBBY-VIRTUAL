@@ -391,6 +391,9 @@ export async function getPersistentActivation(
     phoneNumber: rows[0].phoneNumber ?? "",
     status: rows[0].status,
     priceMinor: rows[0].quotedPriceMinor,
+    providerType: rows[0].providerType,
+    providerReference: rows[0].providerReference ?? undefined,
+    verificationCode: rows[0].verificationCode ?? undefined,
     createdAt: rows[0].createdAt.toISOString(),
     expiresAt:
       rows[0].expiresAt?.toISOString() ?? rows[0].createdAt.toISOString(),
