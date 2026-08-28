@@ -5,12 +5,28 @@ import {
   type SMSProvider,
 } from "./domain";
 import { ExternalSmsProvider } from "./externalSmsProvider";
+import { createHash } from "node:crypto";
 import {
+  canonicalSmsProviderTypeFromConfig,
   describeSmsProviderConfig,
   resolveSmsProviderConfig,
+  type CanonicalSmsProviderType,
   type RuntimeEnv,
   type SmsProviderConfig,
 } from "./smsProviderConfig";
+
+function smsProviderCacheKey(config: SmsProviderConfig): string {
+  if (config.mode === "mock") return "mock";
+  // Include full credential material in the hash so different keys of the same
+  // length never reuse the wrong provider instance.
+  const material = [
+    config.baseUrl,
+    config.apiKey,
+    config.apiSecret ?? "",
+  ].join("\0");
+  const digest = createHash("sha256").update(material).digest("hex");
+  return `external:${digest}`;
+}
 
 /**
  * Provider registry / factory.
@@ -38,10 +54,7 @@ export class ProviderRegistry {
    */
   getSMS(env: RuntimeEnv = process.env): SMSProvider {
     const config = this.validateConfiguration(env);
-    const cacheKey =
-      config.mode === "mock"
-        ? "mock"
-        : `external:${config.baseUrl}:${config.apiKey.length}`;
+    const cacheKey = smsProviderCacheKey(config);
 
     if (this.smsCache?.key === cacheKey) {
       return this.smsCache.provider;
@@ -97,4 +110,21 @@ export function getConfiguredSmsProvider(
   env: RuntimeEnv = process.env
 ): SMSProvider {
   return providerRegistry.getSMS(env);
+}
+
+/**
+ * Resolve provider instance and the canonical providerType that must be
+ * persisted on SMS orders. These are always derived from the same config.
+ */
+export function resolveConfiguredSmsProvider(
+  env: RuntimeEnv = process.env
+): {
+  provider: SMSProvider;
+  providerType: CanonicalSmsProviderType;
+  config: SmsProviderConfig;
+} {
+  const config = providerRegistry.validateConfiguration(env);
+  const provider = providerRegistry.getSMS(env);
+  const providerType = canonicalSmsProviderTypeFromConfig(config);
+  return { provider, providerType, config };
 }

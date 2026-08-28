@@ -53,7 +53,7 @@ function demoToOrder(item: DemoActivation): SmsOrderRecord {
     priceMinor: item.priceMinor,
     currency: "NGN",
     status,
-    providerType: "MOCK",
+    providerType: (item as { providerType?: string }).providerType ?? "MOCK",
     providerReference: item.providerReference ?? null,
     phoneNumber: item.phoneNumber,
     verificationCode: item.verificationCode ?? item.message?.body.match(/\d{4,8}/)?.[0] ?? null,
@@ -317,7 +317,10 @@ function publicDetailToRecord(
     priceMinor: detail.priceMinor,
     currency: "NGN",
     status,
-    providerType: "MOCK",
+    providerType:
+      (detail as { providerType?: string }).providerType ??
+      (row as { providerType?: string } | null | undefined)?.providerType ??
+      "MOCK",
     providerReference: (detail as { providerReference?: string }).providerReference,
     phoneNumber: detail.phoneNumber,
     verificationCode: detail.message?.body.match(/\d{4,8}/)?.[0] ?? null,

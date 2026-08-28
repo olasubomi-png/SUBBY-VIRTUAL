@@ -105,3 +105,21 @@ export function describeSmsProviderConfig(config: SmsProviderConfig): {
     configured: Boolean(config.baseUrl && config.apiKey),
   };
 }
+
+/**
+ * Canonical persisted providerType values (matches smsActivations.providerType
+ * varchar and existing MOCK default in schema migrations).
+ */
+export type CanonicalSmsProviderType = "MOCK" | "EXTERNAL";
+
+export function canonicalSmsProviderType(
+  mode: SmsProviderMode
+): CanonicalSmsProviderType {
+  return mode === "mock" ? "MOCK" : "EXTERNAL";
+}
+
+export function canonicalSmsProviderTypeFromConfig(
+  config: SmsProviderConfig
+): CanonicalSmsProviderType {
+  return canonicalSmsProviderType(config.mode);
+}

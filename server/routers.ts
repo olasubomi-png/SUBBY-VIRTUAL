@@ -22,7 +22,10 @@ import {
 } from "./_core/trpc";
 import { z } from "zod";
 import { LocalDemoMailProvider } from "./domain";
-import { getConfiguredSmsProvider } from "./providers";
+import {
+  getConfiguredSmsProvider,
+  resolveConfiguredSmsProvider,
+} from "./providers";
 import {
   cancelSmsOrder,
   createSmsOrder,
@@ -114,6 +117,10 @@ const mail = new LocalDemoMailProvider();
 /** Resolved per call so SMS_PROVIDER env changes are honored without process restart in tests. */
 function sms() {
   return getConfiguredSmsProvider();
+}
+
+function resolvedSms() {
+  return resolveConfiguredSmsProvider();
 }
 const auditEvents: AuditEvent[] = [];
 
@@ -367,13 +374,14 @@ export const appRouter = router({
         )
           throw new Error("Request rate limit exceeded");
         try {
+          const { provider, providerType } = resolvedSms();
           const result = await createSmsOrder({
             userId: ctx.user.id,
             country: input.country,
             serviceId: input.serviceId,
             idempotencyKey: input.idempotencyKey,
-            provider: sms(),
-            providerType: "MOCK",
+            provider,
+            providerType,
           });
           if (shouldUsePersistentStore() && !result.reused) {
             await writeAuditLog({

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  canonicalSmsProviderType,
+  canonicalSmsProviderTypeFromConfig,
   describeSmsProviderConfig,
   isMockSmsProviderConfig,
   resolveSmsProviderConfig,
@@ -8,6 +10,7 @@ import { ExternalSmsProvider } from "./externalSmsProvider";
 import {
   getConfiguredSmsProvider,
   providerRegistry,
+  resolveConfiguredSmsProvider,
 } from "./providers";
 import { MockSMSProvider } from "./domain";
 
@@ -176,5 +179,98 @@ describe("SMS provider registry selection", () => {
           apiKey: "",
         })
     ).toThrow(/cannot initialize without complete configuration/);
+  });
+});
+
+describe("provider type consistency with resolved configuration", () => {
+  it("maps mock mode to canonical MOCK provider type", () => {
+    expect(canonicalSmsProviderType("mock")).toBe("MOCK");
+    const resolved = resolveConfiguredSmsProvider({ SMS_PROVIDER: "mock" });
+    expect(resolved.provider).toBeInstanceOf(MockSMSProvider);
+    expect(resolved.providerType).toBe("MOCK");
+    expect(resolved.providerType).toBe(
+      canonicalSmsProviderTypeFromConfig(resolved.config)
+    );
+  });
+
+  it("maps external mode to canonical EXTERNAL provider type", () => {
+    expect(canonicalSmsProviderType("external")).toBe("EXTERNAL");
+    const resolved = resolveConfiguredSmsProvider({
+      SMS_PROVIDER: "external",
+      SMS_PROVIDER_BASE_URL: "https://sms.example.com",
+      SMS_PROVIDER_API_KEY: "test-key",
+    });
+    expect(resolved.provider).toBeInstanceOf(ExternalSmsProvider);
+    expect(resolved.providerType).toBe("EXTERNAL");
+    expect(resolved.providerType).toBe(
+      canonicalSmsProviderTypeFromConfig(resolved.config)
+    );
+  });
+
+  it("keeps provider instance and providerType aligned for the same config", () => {
+    const mock = resolveConfiguredSmsProvider({});
+    expect(mock.config.mode).toBe("mock");
+    expect(mock.providerType).toBe("MOCK");
+    expect(mock.provider).toBeInstanceOf(MockSMSProvider);
+
+    const external = resolveConfiguredSmsProvider({
+      SMS_PROVIDER: "external",
+      SMS_PROVIDER_BASE_URL: "https://sms.example.com",
+      SMS_PROVIDER_API_KEY: "key-a",
+    });
+    expect(external.config.mode).toBe("external");
+    expect(external.providerType).toBe("EXTERNAL");
+    expect(external.provider).toBeInstanceOf(ExternalSmsProvider);
+
+    // Provider metadata cannot silently disagree with the selected mode
+    expect(
+      (external.providerType === "EXTERNAL") ===
+        (external.config.mode === "external")
+    ).toBe(true);
+    expect(
+      (mock.providerType === "MOCK") === (mock.config.mode === "mock")
+    ).toBe(true);
+  });
+
+  it("does not reuse a cached provider when external credentials change", () => {
+    providerRegistry.clearSmsCache();
+    const first = getConfiguredSmsProvider({
+      SMS_PROVIDER: "external",
+      SMS_PROVIDER_BASE_URL: "https://sms.example.com",
+      SMS_PROVIDER_API_KEY: "key-one",
+    });
+    const second = getConfiguredSmsProvider({
+      SMS_PROVIDER: "external",
+      SMS_PROVIDER_BASE_URL: "https://sms.example.com",
+      SMS_PROVIDER_API_KEY: "key-two",
+    });
+    expect(first).not.toBe(second);
+    expect(first).toBeInstanceOf(ExternalSmsProvider);
+    expect(second).toBeInstanceOf(ExternalSmsProvider);
+
+    // Same credentials of equal length previously collided; must still differ
+    const sameLenA = getConfiguredSmsProvider({
+      SMS_PROVIDER: "external",
+      SMS_PROVIDER_BASE_URL: "https://sms.example.com",
+      SMS_PROVIDER_API_KEY: "aaaaaaaa",
+    });
+    const sameLenB = getConfiguredSmsProvider({
+      SMS_PROVIDER: "external",
+      SMS_PROVIDER_BASE_URL: "https://sms.example.com",
+      SMS_PROVIDER_API_KEY: "bbbbbbbb",
+    });
+    expect(sameLenA).not.toBe(sameLenB);
+  });
+
+  it("reuses the cached provider only for identical configuration", () => {
+    providerRegistry.clearSmsCache();
+    const env = {
+      SMS_PROVIDER: "external",
+      SMS_PROVIDER_BASE_URL: "https://sms.example.com",
+      SMS_PROVIDER_API_KEY: "stable-key",
+    };
+    const a = getConfiguredSmsProvider(env);
+    const b = getConfiguredSmsProvider(env);
+    expect(a).toBe(b);
   });
 });
