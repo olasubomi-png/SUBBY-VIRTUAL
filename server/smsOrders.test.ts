@@ -1,15 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MockSMSProvider } from "./domain";
-import { resetDemoState, getDemoWallet } from "./demoState";
+import { resetDemoState, getDemoWallet, listActivations } from "./demoState";
 import {
   cancelSmsOrder,
   createSmsOrder,
   expireSmsOrder,
   getSmsOrder,
+  listSmsOrders,
   markSmsCodeReceived,
   seedDemoCreditsForTests,
 } from "./smsOrders";
-import { assertSmsOrderTransition } from "./smsOrderLifecycle";
+import {
+  assertSmsOrderTransition,
+  canTransitionSmsOrder,
+  isTerminalSmsOrderStatus,
+  normalizeSmsOrderStatus,
+} from "./smsOrderLifecycle";
 
 const provider = new MockSMSProvider();
 
@@ -225,10 +231,43 @@ describe("provider failure handling", () => {
         provider: failingProvider,
       })
     ).rejects.toThrow("Unable to allocate SMS number");
-    // Balance was reserved for the attempt; order should be terminal failed.
-    // Debit happens before provider call by design (atomic create+debit).
+
+    const stored = listActivations(60);
+    expect(stored).toHaveLength(1);
+    expect(stored[0].status).toBe("failed");
+    expect(stored[0].status).toBe(stored[0].status.toLowerCase());
+    expect(stored[0].status).not.toMatch(/[A-Z]/);
+    expect(normalizeSmsOrderStatus(stored[0].status)).toBe("failed");
+    expect(isTerminalSmsOrderStatus("failed")).toBe(true);
+
+    // Terminal protection: no further lifecycle mutations
+    await expect(cancelSmsOrder(60, stored[0].id)).rejects.toThrow();
+    await expect(expireSmsOrder(60, stored[0].id)).rejects.toThrow();
+    await expect(markSmsCodeReceived(60, stored[0].id, "999999")).rejects.toThrow();
+    expect(() => assertSmsOrderTransition("failed", "code_received")).toThrow(
+      /terminal/
+    );
+    expect(() => assertSmsOrderTransition("failed", "completed")).toThrow(
+      /terminal/
+    );
+    expect(() => assertSmsOrderTransition("failed", "cancelled")).toThrow(
+      /terminal/
+    );
+    expect(() => assertSmsOrderTransition("failed", "expired")).toThrow(
+      /terminal/
+    );
+
+    // Debit happens once before provider call (atomic create+debit).
     expect(getDemoWallet(60).ledger.filter(e => e.type === "DEBIT")).toHaveLength(
       1
     );
+
+    const listed = await listSmsOrders(60);
+    expect(listed[0].status).toBe("failed");
+  });
+
+  it("allows the active → failed transition explicitly", () => {
+    expect(canTransitionSmsOrder("active", "failed")).toBe(true);
+    expect(() => assertSmsOrderTransition("active", "failed")).not.toThrow();
   });
 });

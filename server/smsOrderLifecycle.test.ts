@@ -43,6 +43,7 @@ describe("SMS order valid transitions", () => {
     ["active", "code_received"],
     ["active", "cancelled"],
     ["active", "expired"],
+    ["active", "failed"],
     ["code_received", "completed"],
     ["code_received", "cancelled"],
     ["code_received", "expired"],
@@ -63,7 +64,7 @@ describe("SMS order valid transitions", () => {
       expect.arrayContaining(["active", "failed"])
     );
     expect(SMS_ORDER_TRANSITIONS.active).toEqual(
-      expect.arrayContaining(["code_received", "cancelled", "expired"])
+      expect.arrayContaining(["code_received", "cancelled", "expired", "failed"])
     );
     expect(SMS_ORDER_TRANSITIONS.code_received).toEqual(
       expect.arrayContaining(["completed", "cancelled", "expired"])
