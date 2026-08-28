@@ -81,4 +81,47 @@ describe("mock provider contracts", () => {
       ).status
     ).toBe("WAITING");
   });
+
+  it("exposes a broad mock country catalog for SMS options", async () => {
+    const provider = new MockSMSProvider();
+    const countries = await provider.getCountries();
+    const codes = countries.map(country => country.code);
+
+    // Catalog must stay larger than the historical 3-country UI hardcode.
+    expect(countries.length).toBeGreaterThanOrEqual(20);
+    expect(new Set(codes).size).toBe(codes.length);
+    for (const country of countries) {
+      expect(country.code).toMatch(/^[A-Z]{2}$/);
+      expect(country.name.trim().length).toBeGreaterThan(1);
+    }
+    expect(codes).toEqual(
+      expect.arrayContaining([
+        "NG",
+        "US",
+        "GB",
+        "CA",
+        "DE",
+        "FR",
+        "IN",
+        "BR",
+        "ZA",
+        "KE",
+        "GH",
+      ])
+    );
+  });
+
+  it("maps buyActivation phone numbers for catalog countries", async () => {
+    const provider = new MockSMSProvider();
+    const countries = await provider.getCountries();
+    for (const country of countries.slice(0, 8)) {
+      const activation = await provider.buyActivation({
+        userId: 11,
+        country: country.code,
+        serviceId: "whatsapp",
+      });
+      expect(activation.phoneNumber.startsWith("+")).toBe(true);
+      expect(activation.status).toBe("WAITING");
+    }
+  });
 });

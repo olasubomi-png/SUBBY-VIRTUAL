@@ -339,6 +339,10 @@ export const appRouter = router({
           !(await checkDistributedRateLimit(`subby:sms:${ctx.user.id}`, 5, 60))
         )
           throw new Error("Request rate limit exceeded");
+        const countries = await sms.getCountries();
+        if (!countries.some(item => item.code === input.country)) {
+          throw new Error("Unknown SMS country");
+        }
         const pricing = await sms.getPricing();
         const quote = pricing.find(item => item.serviceId === input.serviceId);
         if (!quote) throw new Error("Unknown SMS service");

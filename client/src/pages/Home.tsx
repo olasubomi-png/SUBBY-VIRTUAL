@@ -540,10 +540,15 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
                     value={country}
                     onChange={e => setCountry(e.target.value)}
                     className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0a0c12] px-3 text-sm text-slate-200"
+                    disabled={!smsOptions.data?.countries?.length}
                   >
-                    <option value="NG">Nigeria (NG)</option>
-                    <option value="GB">United Kingdom (GB)</option>
-                    <option value="US">United States (US)</option>
+                    {(smsOptions.data?.countries ?? [{ code: "NG", name: "Nigeria" }]).map(
+                      item => (
+                        <option key={item.code} value={item.code}>
+                          {item.name} ({item.code})
+                        </option>
+                      )
+                    )}
                   </select>
                 </label>
                 <label className="block text-xs text-slate-400">

@@ -110,6 +110,37 @@ export function debitDemoCredits(
 export function getDemoWallet(userId: number) {
   return walletFor(userId);
 }
+
+const demoPhonePrefixes: Record<string, string> = {
+  NG: "+234 809 440 2186",
+  US: "+1 202 555 0147",
+  GB: "+44 7400 123 866",
+  CA: "+1 416 555 0198",
+  DE: "+49 151 23456789",
+  FR: "+33 6 12 34 56 78",
+  IT: "+39 312 345 6789",
+  ES: "+34 612 345 678",
+  NL: "+31 6 12345678",
+  BE: "+32 470 12 34 56",
+  SE: "+46 70 123 45 67",
+  NO: "+47 412 34 567",
+  DK: "+45 20 12 34 56",
+  FI: "+358 40 123 4567",
+  PL: "+48 512 345 678",
+  AU: "+61 412 345 678",
+  NZ: "+64 21 123 4567",
+  IN: "+91 98765 43210",
+  BR: "+55 11 91234 5678",
+  MX: "+52 55 1234 5678",
+  ZA: "+27 82 123 4567",
+  KE: "+254 712 345678",
+  GH: "+233 24 123 4567",
+  AE: "+971 50 123 4567",
+  SA: "+966 50 123 4567",
+};
+function demoPhoneForCountry(country: string) {
+  return demoPhonePrefixes[country] ?? "+1 202 555 0147";
+}
 export function createDemoActivation(input: {
   userId: number;
   country: string;
@@ -122,12 +153,7 @@ export function createDemoActivation(input: {
     userId: input.userId,
     country: input.country,
     serviceId: input.serviceId,
-    phoneNumber:
-      input.country === "NG"
-        ? "+234 809 440 2186"
-        : input.country === "GB"
-          ? "+44 7400 123 866"
-          : "+1 202 555 0147",
+    phoneNumber: demoPhoneForCountry(input.country),
     status: "ACTIVE",
     priceMinor: input.priceMinor,
     createdAt: now(),
