@@ -1,33 +1,35 @@
 /**
  * SUBBY Points — user-facing billing unit.
  *
- * Authoritative business rules (server-side only):
- *   1 SUBBY Point = 1 virtual number / SMS activation
+ * Point denomination (wallet top-ups / package pricing):
  *   1 SUBBY Point = ₦500 NGN = 50_000 kobo
  *
- * Ledger representation:
- *   1 Point = 1 ledger unit (integer). Wallet balances are stored as points.
+ * SMS activation pricing is **dynamic** from the live provider catalog:
+ *   provider cost → FX to NGN kobo → markup (SMS_MARKUP_BPS) → retail kobo
+ *   points charged = ceil(retailKobo / 50_000)
  *
- * Never use floating-point arithmetic for balances, debits, or Paystack amounts.
+ * Ledger representation: 1 Point = 1 ledger unit (integer).
+ * Never use floating-point arithmetic for balances or debits.
  */
 
 export const POINTS_UNIT_NAME = "SUBBY Points";
 
-/** 1 Point = ₦500 */
+/** 1 Point = ₦500 (top-up denomination and SMS points conversion divisor). */
 export const NGN_MAJOR_PER_POINT = 500 as const;
 
-/** 1 Point = 50_000 kobo (NGN minor units for Paystack). */
+/** 1 Point = 50_000 kobo. */
 export const KOBO_PER_POINT = 50_000 as const;
 
-/** 1 SMS / virtual-number activation costs exactly 1 Point. */
+/** Live SMS retail pricing algorithm version (persisted on orders). */
+export const SMS_LIVE_PRICING_VERSION = "sms-live-v1" as const;
+
+/** @deprecated fixed activation points — use retailKoboToPoints(retail) instead */
 export const SMS_ACTIVATION_POINTS = 1 as const;
 
-/** Pricing version snapshot for top-ups and orders. */
-export const POINTS_PRICING_VERSION = "points-v1-500ngn" as const;
+export const POINTS_PRICING_VERSION = SMS_LIVE_PRICING_VERSION;
 
 export const POINTS_PER_LEDGER_MINOR = 1 as const;
 
-/** Convert ledger units → points (identity). */
 export function minorToPoints(amountMinor: number): number {
   if (!Number.isSafeInteger(amountMinor)) {
     throw new Error("Invalid amount");
@@ -35,7 +37,6 @@ export function minorToPoints(amountMinor: number): number {
   return amountMinor * POINTS_PER_LEDGER_MINOR;
 }
 
-/** Convert points → ledger units (identity). */
 export function pointsToMinor(points: number): number {
   if (!Number.isSafeInteger(points) || points < 0) {
     throw new Error("Points must be a non-negative integer");
@@ -49,10 +50,7 @@ export function assertPositivePoints(points: number): void {
   }
 }
 
-/**
- * Authoritative NGN kobo for a points quantity.
- * points × 50_000 — integer only.
- */
+/** points × 50_000 kobo — integer only. */
 export function pointsToKobo(points: number): number {
   assertPositivePoints(points);
   const product = BigInt(points) * BigInt(KOBO_PER_POINT);
@@ -62,7 +60,7 @@ export function pointsToKobo(points: number): number {
   return Number(product);
 }
 
-/** Inverse check: expected points for a kobo amount under current pricing. */
+/** Exact inverse when kobo is a multiple of the point value. */
 export function koboToPointsExact(kobo: number): number {
   if (!Number.isSafeInteger(kobo) || kobo <= 0) {
     throw new Error("Invalid kobo amount");
@@ -73,16 +71,31 @@ export function koboToPointsExact(kobo: number): number {
   return kobo / KOBO_PER_POINT;
 }
 
+/**
+ * Points to debit for an SMS retail price in NGN kobo.
+ * Always rounds up so SUBBY never undercharges.
+ * ceil(retailKobo / 50_000)
+ */
+export function retailKoboToPoints(retailKobo: number): number {
+  if (!Number.isSafeInteger(retailKobo) || retailKobo <= 0) {
+    throw new Error("Invalid retail price");
+  }
+  const den = BigInt(KOBO_PER_POINT);
+  const num = BigInt(retailKobo);
+  const q = num / den;
+  const r = num % den;
+  const points = r === 0n ? q : q + 1n;
+  if (points > BigInt(Number.MAX_SAFE_INTEGER) || points <= 0n) {
+    throw new Error("Invalid points charge");
+  }
+  return Number(points);
+}
+
 export type LedgerEntryType =
   | "CREDIT"
   | "DEBIT"
   | "REFUND"
   | "ADMIN_ADJUSTMENT";
-
-export const CREDIT_LIKE_TYPES: readonly LedgerEntryType[] = [
-  "CREDIT",
-  "REFUND",
-] as const;
 
 export function isCreditEffect(
   type: LedgerEntryType,
@@ -97,13 +110,11 @@ export function isCreditEffect(
   return type === "CREDIT" || type === "REFUND";
 }
 
-/** Format points for display (no currency symbol). */
 export function formatPoints(points: number): string {
   if (!Number.isSafeInteger(points)) return "0";
   return points.toLocaleString("en-US");
 }
 
-/** Format NGN major from kobo for display strings only. */
 export function formatNgnFromKobo(kobo: number): string {
   if (!Number.isSafeInteger(kobo)) return "₦0";
   const major = Math.trunc(kobo / 100);

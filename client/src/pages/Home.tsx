@@ -556,6 +556,9 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
                     className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0a0c12] px-3 text-sm text-slate-200"
                     disabled={!smsOptions.data?.countries?.length}
                   >
+                    {smsOptions.isLoading && (
+                      <option value="">Loading catalog…</option>
+                    )}
                     {(smsOptions.data?.countries ?? [{ code: "NG", name: "Nigeria" }]).map(
                       item => (
                         <option key={item.code} value={item.code}>
@@ -584,7 +587,10 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
                       );
                       return (
                       <option key={service.id} value={service.id}>
-                        {service.name} · 1 Point
+                        {service.name}
+                        {quote?.amount != null
+                          ? ` · ₦${(quote.amount / 100).toLocaleString("en-US", { maximumFractionDigits: 0 })}`
+                          : ""}
                       </option>
                       );
                     })}
@@ -1888,7 +1894,7 @@ function Wallet() {
         <p className="mb-2 text-sm text-slate-500">Workspace / Wallet</p>
         <h1 className="text-3xl font-semibold text-white">Wallet</h1>
         <p className="mt-2 text-sm text-slate-400">
-          1 Point = ₦500 = 1 virtual number. Payments are verified server-side.
+          Prices are live from the SMS catalog. Payments are verified server-side.
         </p>
       </div>
       <Card className="border-cyan-300/20 bg-gradient-to-br from-cyan-400/10 to-[#10131c] shadow-none">

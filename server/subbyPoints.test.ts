@@ -7,7 +7,7 @@ import {
   minorToPoints,
   pointsToKobo,
   pointsToMinor,
-  SMS_ACTIVATION_POINTS,
+  retailKoboToPoints,
 } from "./subbyPoints";
 import {
   addDemoCredits,
@@ -37,13 +37,20 @@ describe("SUBBY Points representation", () => {
   it("prices 1 Point at ₦500 (50_000 kobo)", () => {
     expect(NGN_MAJOR_PER_POINT).toBe(500);
     expect(KOBO_PER_POINT).toBe(50_000);
-    expect(SMS_ACTIVATION_POINTS).toBe(1);
-    expect(pointsToKobo(1)).toBe(50_000);
+        expect(pointsToKobo(1)).toBe(50_000);
     expect(pointsToKobo(2)).toBe(100_000);
     expect(pointsToKobo(5)).toBe(250_000);
     expect(pointsToKobo(10)).toBe(500_000);
     expect(pointsToKobo(20)).toBe(1_000_000);
     expect(pointsToKobo(100)).toBe(5_000_000);
+  });
+
+  it("converts retail kobo to Points with ceil", () => {
+    expect(retailKoboToPoints(50_000)).toBe(1);
+    expect(retailKoboToPoints(1)).toBe(1);
+    expect(retailKoboToPoints(50_001)).toBe(2);
+    expect(retailKoboToPoints(85_000)).toBe(2);
+    expect(retailKoboToPoints(100_000)).toBe(2);
   });
 
   it("classifies ledger effects", () => {
@@ -73,7 +80,7 @@ describe("points debit and refund", () => {
     expect(getDemoWallet(101).balanceMinor).toBe(60);
   });
 
-  it("SMS purchase debits exactly 1 Point per activation", async () => {
+  it("SMS purchase debits Points derived from retail kobo", async () => {
     seedDemoCreditsForTests(102, 50_000, "seed-102");
     const result = await createSmsOrder({
       userId: 102,

@@ -1,44 +1,27 @@
 # SUBBY Points Wallet
 
-## What are SUBBY Points?
-
-**SUBBY Points** are the user-facing billing unit for SUBBY VIRTUAL.
+## Denomination
 
 ```
-1 SUBBY Point = 1 virtual number / SMS activation
 1 SUBBY Point = ₦500 NGN = 50,000 kobo
 ```
 
-Ledger representation: **1 Point = 1 integer ledger unit**.
+Used for top-up packages and converting SMS retail NGN prices into Points charged.
 
-## Examples
+## SMS activation pricing (dynamic)
 
-| Points | NGN | Paystack kobo | Activations |
-|--------|-----|---------------|-------------|
-| 1 | ₦500 | 50,000 | 1 |
-| 5 | ₦2,500 | 250,000 | 5 |
-| 10 | ₦5,000 | 500,000 | 10 |
-| 20 | ₦10,000 | 1,000,000 | 20 |
-| 100 | ₦50,000 | 5,000,000 | 100 |
+SMS prices are **not** fixed at ₦500.
 
-## SMS billing
+```
+provider cost (live)
+  → NGN kobo (FX)
+  → + SMS_MARKUP_BPS
+  → retail kobo
+  → points charged = ceil(retailKobo / 50_000)
+```
 
-Each successful billable activation debits **exactly 1 Point**.
-
-Failed allocation refunds **1 Point** once (idempotent reference).
-
-Provider cost is internal only and is not charged to the user as variable pricing.
-
-## Architecture
-
-PostgreSQL `walletLedgerEntries` is the sole source of truth for balances.
+Orders snapshot `quotedPriceMinor` (Points debited), `providerCostMinor`, `markupBps`, `pricingVersion`.
 
 ## Top-ups
 
-Server packages (`pts_1` … `pts_100`) compute Paystack amount as `points × 50_000` kobo.
-
-Clients send only `packageId` + `idempotencyKey`.
-
-## Out of scope documentation
-
-Never document real Paystack secrets.
+Packages still use `points × 50,000` kobo for Paystack amounts.

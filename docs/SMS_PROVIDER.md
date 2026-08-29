@@ -61,6 +61,19 @@ External mode loads prices via the provider `getPrices` action and normalizes th
 - Cache is provider-isolated; force refresh available for admin/ops.
 - Refresh failure fails closed (no mock fallback, no invented prices).
 
+## Dynamic retail pricing
+
+Customer SMS price is derived live from the provider catalog:
+
+```
+provider cost → NGN kobo → × (1 + SMS_MARKUP_BPS/10000) ceil → retail kobo
+points charged = ceil(retailKobo / 50_000)
+```
+
+`SMS_MARKUP_BPS` default 0 in code; set explicitly in production (e.g. 1000 = 10%).
+
+Orders snapshot `quotedPriceMinor` (Points debited), `providerCostMinor`, `markupBps`, `pricingVersion` (`sms-live-v1-…`).
+
 ## Pricing model
 
 ```

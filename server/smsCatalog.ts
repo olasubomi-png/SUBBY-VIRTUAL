@@ -104,20 +104,20 @@ export function toPublicCatalog(entries: NormalizedCatalogEntry[]): PublicCatalo
 }
 
 function mockCatalog(markupBps: number): CatalogSnapshot {
-  // User-facing activation cost is always 1 Point (provider cost is internal only)
+  // Mock provider costs in NGN kobo (integer). Retail = cost + markup.
   const pricing: Array<{ serviceId: string; amount: number }> = [
-    { serviceId: "verify", amount: 1 },
-    { serviceId: "whatsapp", amount: 1 },
-    { serviceId: "telegram", amount: 1 },
-    { serviceId: "google", amount: 1 },
-    { serviceId: "facebook", amount: 1 },
-    { serviceId: "instagram", amount: 1 },
-    { serviceId: "tiktok", amount: 1 },
-    { serviceId: "twitter", amount: 1 },
-    { serviceId: "discord", amount: 1 },
-    { serviceId: "uber", amount: 1 },
-    { serviceId: "amazon", amount: 1 },
-    { serviceId: "sandbox", amount: 1 },
+    { serviceId: "verify", amount: 25_000 },
+    { serviceId: "whatsapp", amount: 30_000 },
+    { serviceId: "telegram", amount: 22_000 },
+    { serviceId: "google", amount: 35_000 },
+    { serviceId: "facebook", amount: 28_000 },
+    { serviceId: "instagram", amount: 28_000 },
+    { serviceId: "tiktok", amount: 32_000 },
+    { serviceId: "twitter", amount: 30_000 },
+    { serviceId: "discord", amount: 20_000 },
+    { serviceId: "uber", amount: 40_000 },
+    { serviceId: "amazon", amount: 33_000 },
+    { serviceId: "sandbox", amount: 15_000 },
   ];
   const countries = [
     { code: "NG", name: "Nigeria" },
@@ -152,7 +152,7 @@ function mockCatalog(markupBps: number): CatalogSnapshot {
       });
     }
   }
-  const version = `mock-${entries.length}-${markupBps}`;
+  const version = `sms-live-v1-mock-${entries.length}-m${markupBps}`;
   return {
     version,
     fetchedAt: Date.now(),
@@ -257,8 +257,8 @@ export async function buildExternalCatalog(
     } catch {
       continue; // skip invalid price rows
     }
-    // User pays 1 Point; provider cost retained for internal accounting only
-    const retailPriceMinor = 1;
+    // Customer retail = provider cost + configured markup (integer ceil)
+    const retailPriceMinor = applyMarkupBps(providerCostMinor, markupBps);
     entries.push({
       countryCode,
       countryName: countryCode,
@@ -279,7 +279,7 @@ export async function buildExternalCatalog(
       { retryable: true }
     );
   }
-  const version = `ext-${entries.length}-${markupBps}-${fx}-${Date.now()}`;
+  const version = `sms-live-v1-ext-${entries.length}-m${markupBps}-${fx}`;
   return {
     version,
     fetchedAt: Date.now(),

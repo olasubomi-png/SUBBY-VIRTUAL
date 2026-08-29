@@ -65,9 +65,9 @@ describe("mock catalog", () => {
       "whatsapp",
       { SMS_PROVIDER: "mock" }
     );
-    expect(quote.retailPriceMinor).toBe(1);
+    expect(quote.retailPriceMinor).toBe(30_000);
     expect(quote.available).toBe(true);
-    expect(quote.pricingVersion).toMatch(/^mock-/);
+    expect(quote.pricingVersion).toMatch(/sms-live/);
   });
 });
 
@@ -115,7 +115,7 @@ describe("external live catalog", () => {
     expect(entry).toBeDefined();
     expect(entry!.available).toBe(true);
     expect(entry!.providerCostMinor).toBe(40_000);
-    expect(entry!.retailPriceMinor).toBe(1);
+    expect(entry!.retailPriceMinor).toBe(44_000);
   });
 
   it("marks zero-count services unavailable", async () => {

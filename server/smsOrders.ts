@@ -9,9 +9,10 @@ import { providerStatusToCanonicalTarget } from "./smsProviderMapping";
 import { resolvePriceQuote } from "./smsCatalog";
 import { parseMarkupBps } from "./smsPricing";
 import {
-  POINTS_PRICING_VERSION,
-  SMS_ACTIVATION_POINTS,
+  SMS_LIVE_PRICING_VERSION,
+  retailKoboToPoints,
 } from "./subbyPoints";
+
 import { assertProviderCostAllowed } from "./smsProviderCostGuard";
 import {
   assertSmsOrderTransition,
@@ -112,9 +113,10 @@ async function createDemoOrder(input: CreateSmsOrderInput): Promise<{
     input.country,
     input.serviceId
   );
-  // User-facing charge is always 1 Point per activation (server-authoritative)
-  const chargePoints = SMS_ACTIVATION_POINTS;
+  // Dynamic Points charge from live/mock retail (NGN kobo → ceil to Points)
+  const chargePoints = retailKoboToPoints(priceQuote.retailPriceMinor);
   const currency = "NGN" as const;
+  const markupBps = parseMarkupBps(process.env.SMS_MARKUP_BPS);
 
   const existing = listDemoActivations(input.userId).find(
     a => a.idempotencyKey === input.idempotencyKey
@@ -152,7 +154,8 @@ async function createDemoOrder(input: CreateSmsOrderInput): Promise<{
   (order as { providerCostMinor?: number }).providerCostMinor =
     priceQuote.providerCostMinor;
   (order as { pricingVersion?: string }).pricingVersion =
-    POINTS_PRICING_VERSION;
+    priceQuote.pricingVersion || SMS_LIVE_PRICING_VERSION;
+  (order as { markupBps?: number }).markupBps = markupBps;
 
   try {
     order = transitionDemoOrder(order.id, input.userId, "allocating");
@@ -256,10 +259,10 @@ async function createPersistentOrder(input: CreateSmsOrderInput): Promise<{
     providerType: input.providerType ?? "MOCK",
     countryCode: input.country,
     serviceId: input.serviceId,
-    quotedPriceMinor: SMS_ACTIVATION_POINTS,
+    quotedPriceMinor: retailKoboToPoints(priceQuote.retailPriceMinor),
     providerCostMinor: priceQuote.providerCostMinor,
-    pricingVersion: POINTS_PRICING_VERSION,
-    markupBps: 0,
+    pricingVersion: priceQuote.pricingVersion || SMS_LIVE_PRICING_VERSION,
+    markupBps: parseMarkupBps(process.env.SMS_MARKUP_BPS),
     currency: "NGN",
     status: "pending",
     expiresAt,
@@ -335,7 +338,7 @@ async function createPersistentOrder(input: CreateSmsOrderInput): Promise<{
     try {
       await refundSmsAllocation(
         input.userId,
-        SMS_ACTIVATION_POINTS,
+        retailKoboToPoints(priceQuote.retailPriceMinor),
         input.idempotencyKey
       );
     } catch {
