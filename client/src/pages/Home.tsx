@@ -9,7 +9,8 @@ import {
   getUsableDisplayName,
 } from "@shared/greeting";
 import { cn } from "@/lib/utils";
-import { BrandLockup, BrandMark } from "@/components/Brand";
+import { BrandLockup, BrandMark } from "@/components/Brand"
+import { SmsMarketplace } from "@/components/SmsMarketplace";
 import {
   ArrowUpRight,
   BarChart3,
@@ -547,69 +548,15 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
           </CardHeader>
           <CardContent className="space-y-4">
             {type === "sms" ? (
-              <>
-                <label className="block text-xs text-slate-400">
-                  Country
-                  <select
-                    value={country}
-                    onChange={e => setCountry(e.target.value)}
-                    className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0a0c12] px-3 text-sm text-slate-200"
-                    disabled={!smsOptions.data?.countries?.length}
-                  >
-                    {smsOptions.isLoading && (
-                      <option value="">Loading catalog…</option>
-                    )}
-                    {(smsOptions.data?.countries ?? [{ code: "NG", name: "Nigeria" }]).map(
-                      item => (
-                        <option key={item.code} value={item.code}>
-                          {item.name} ({item.code})
-                        </option>
-                      )
-                    )}
-                  </select>
-                </label>
-                <label className="block text-xs text-slate-400">
-                  Service
-                  <select
-                    value={serviceId}
-                    onChange={e => setServiceId(e.target.value)}
-                    className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0a0c12] px-3 text-sm text-slate-200"
-                  >
-                    {smsOptions.data?.services.map(service => {
-                      const quote = smsOptions.data.pricing.find(
-                        p =>
-                          p.serviceId === service.id &&
-                          (p as { countryCode?: string }).countryCode ===
-                            country &&
-                          (p as { available?: boolean }).available !== false
-                      ) ?? smsOptions.data.pricing.find(
-                        p => p.serviceId === service.id
-                      );
-                      return (
-                      <option key={service.id} value={service.id}>
-                        {service.name}
-                        {quote?.amount != null
-                          ? ` · ₦${(quote.amount / 100).toLocaleString("en-US", { maximumFractionDigits: 0 })}`
-                          : ""}
-                      </option>
-                      );
-                    })}
-                  </select>
-                </label>
-                <Button
-                  disabled={createSms.isPending}
-                  onClick={() =>
-                    createSms.mutate({
-                      country,
-                      serviceId,
-                      idempotencyKey: crypto.randomUUID(),
-                    })
-                  }
-                  className="h-11 w-full rounded-lg bg-cyan-300 font-semibold text-slate-950 hover:bg-cyan-200"
-                >
-                  {createSms.isPending ? "Creating…" : "Get demo number"}
-                </Button>
-              </>
+              <div className="space-y-2">
+                <SmsMarketplace
+                  onOrdered={id => {
+                    setSelectedId(id);
+                    smsRequests.refetch();
+                  }}
+                  onFeedback={setFeedback}
+                />
+              </div>
             ) : (
               <>
                 <label className="block text-xs text-slate-400">

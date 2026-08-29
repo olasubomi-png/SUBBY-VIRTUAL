@@ -20,6 +20,7 @@ import {
   mapServiceToProviderCode,
 } from "./smsProviderMapping";
 import { SmsProviderError } from "./smsProviderErrors";
+import { resolveCountryName } from "./countryNames";
 
 export const CATALOG_CACHE_TTL_MS = 60_000; // 60s bounded cache
 
@@ -29,6 +30,7 @@ export type NormalizedCatalogEntry = {
   serviceId: string;
   serviceName: string;
   available: boolean;
+  count: number;
   providerCostMinor: number;
   retailPriceMinor: number;
   currency: WalletCurrency;
@@ -43,6 +45,7 @@ export type PublicCatalogEntry = {
   serviceId: string;
   serviceName: string;
   available: boolean;
+  count: number;
   retailPriceMinor: number;
   currency: WalletCurrency;
 };
@@ -98,6 +101,7 @@ export function toPublicCatalog(entries: NormalizedCatalogEntry[]): PublicCatalo
     serviceId: e.serviceId,
     serviceName: e.serviceName,
     available: e.available,
+    count: e.count,
     retailPriceMinor: e.retailPriceMinor,
     currency: e.currency,
   }));
@@ -144,6 +148,7 @@ function mockCatalog(markupBps: number): CatalogSnapshot {
           PROVIDER_SERVICE_LABELS[SERVICE_TO_PROVIDER_CODE[price.serviceId] ?? ""] ??
           price.serviceId,
         available: true,
+        count: 50_000,
         providerCostMinor: cost,
         retailPriceMinor: retail,
         currency: "NGN",
@@ -261,7 +266,7 @@ export async function buildExternalCatalog(
     const retailPriceMinor = applyMarkupBps(providerCostMinor, markupBps);
     entries.push({
       countryCode,
-      countryName: countryCode,
+      countryName: resolveCountryName(countryCode),
       serviceId,
       serviceName: PROVIDER_SERVICE_LABELS[row.serviceCode] ?? serviceId,
       available: row.count > 0,

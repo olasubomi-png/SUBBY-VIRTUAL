@@ -509,6 +509,9 @@ export const appRouter = router({
         amount: number;
         currency: string;
         available: boolean;
+        count: number;
+        serviceName: string;
+        countryName: string;
       }> = [];
       for (const entry of publicEntries) {
         countriesMap.set(entry.countryCode, entry.countryName);
@@ -519,6 +522,9 @@ export const appRouter = router({
           amount: entry.retailPriceMinor,
           currency: entry.currency,
           available: entry.available,
+          count: entry.count,
+          serviceName: entry.serviceName,
+          countryName: entry.countryName,
         });
       }
       return {
@@ -531,8 +537,10 @@ export const appRouter = router({
           name,
         })),
         pricing,
+        entries: publicEntries,
         catalogVersion: snapshot.version,
-        // provider cost intentionally omitted
+        refreshedAt: new Date(snapshot.fetchedAt).toISOString(),
+        // provider cost intentionally omitted from public response
       };
     }),
     createSmsRequest: protectedProcedure
