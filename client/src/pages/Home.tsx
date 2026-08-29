@@ -169,11 +169,11 @@ function Overview({ setActive }: { setActive: (id: string) => void }) {
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
           <p className="mb-2 text-sm text-slate-500">{dateLabel}</p>
-          <h1 className="text-3xl font-semibold tracking-tight text-amber-400 md:text-4xl">
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-50 md:text-4xl">
             {displayName ? (
               <>
                 {timeGreeting},{" "}
-                <span className="text-emerald-500">{displayName}.</span>
+                <span className="text-emerald-400">{displayName}.</span>
               </>
             ) : (
               <>{timeGreeting}.</>
@@ -2157,7 +2157,7 @@ export default function Home() {
             </div>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-[1400px] overflow-x-hidden p-4 sm:p-5 md:p-10">
+        <main className="mx-auto w-full max-w-[1200px] min-w-0 overflow-x-hidden px-3 py-4 sm:px-5 sm:py-6 md:p-8 lg:p-10">
           {active === "overview" && <Overview setActive={setActive} />}
           {active === "sms" && <RequestPage type="sms" />}
           {active === "mail" && <RequestPage type="mail" />}
