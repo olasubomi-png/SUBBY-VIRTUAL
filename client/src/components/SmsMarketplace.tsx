@@ -50,7 +50,7 @@ function UpdatedLabel({ iso }: { iso?: string }) {
 
 export function SmsMarketplace({ onOrdered, onFeedback }: Props) {
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<"popular" | "all">("popular");
+  const [filter, setFilter] = useState<"available" | "popular" | "all">("available");
   const [selected, setSelected] = useState<CatalogEntry | null>(null);
   const wallet = trpc.workspace.wallet.useQuery();
   const smsOptions = trpc.workspace.smsOptions.useQuery(undefined, {
@@ -107,10 +107,25 @@ export function SmsMarketplace({ onOrdered, onFeedback }: Props) {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = entries;
-    if (filter === "popular") {
-      list = list.filter(e => POPULAR_SERVICE_IDS.includes(e.serviceId));
-      if (list.length === 0) list = entries;
+    if (filter === "available") {
+      list = list.filter(e => e.available && e.count > 0);
+    } else if (filter === "popular") {
+      list = list.filter(
+        e =>
+          POPULAR_SERVICE_IDS.includes(e.serviceId) &&
+          e.available &&
+          e.count > 0
+      );
+      if (list.length === 0) {
+        list = entries.filter(e => e.available && e.count > 0);
+      }
     }
+    // Sort: available first, then by count desc
+    list = [...list].sort((a, b) => {
+      const av = Number(b.available && b.count > 0) - Number(a.available && a.count > 0);
+      if (av !== 0) return av;
+      return (b.count || 0) - (a.count || 0);
+    });
     if (!q) return list;
     return list.filter(e => {
       return (
@@ -153,10 +168,10 @@ export function SmsMarketplace({ onOrdered, onFeedback }: Props) {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="rounded-2xl border border-white/10 bg-[#0c1018] p-4 sm:p-5">
+      <div className="rounded-2xl border border-white/10 bg-[#0d1210] p-4 sm:p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-400/90">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-400/90">
               SMS Activations
             </p>
             <p className="text-sm text-slate-400 leading-relaxed max-w-xl">
@@ -195,17 +210,29 @@ export function SmsMarketplace({ onOrdered, onFeedback }: Props) {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search services or countries…"
-              className="h-11 w-full rounded-xl border border-white/10 bg-[#0a0c12] pl-10 pr-3 text-sm text-slate-100 placeholder:text-slate-600 focus:border-cyan-500/40 focus:outline-none"
+              className="h-11 w-full rounded-xl border border-white/10 bg-[#0a0e0b] pl-10 pr-3 text-sm text-slate-100 placeholder:text-slate-600 focus:border-emerald-500/40 focus:outline-none"
             />
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setFilter("available")}
+              className={cn(
+                "h-11 min-w-[5.5rem] rounded-xl px-3 text-xs font-medium transition",
+                filter === "available"
+                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                  : "border border-white/10 text-slate-400 hover:text-slate-200"
+              )}
+            >
+              Available
+            </button>
             <button
               type="button"
               onClick={() => setFilter("popular")}
               className={cn(
                 "h-11 min-w-[5.5rem] rounded-xl px-3 text-xs font-medium transition",
                 filter === "popular"
-                  ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/30"
+                  ? "bg-emerald-500/15 text-emerald-500 border border-emerald-500/30"
                   : "border border-white/10 text-slate-400 hover:text-slate-200"
               )}
             >
@@ -217,7 +244,7 @@ export function SmsMarketplace({ onOrdered, onFeedback }: Props) {
               className={cn(
                 "h-11 min-w-[5.5rem] rounded-xl px-3 text-xs font-medium transition",
                 filter === "all"
-                  ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/30"
+                  ? "bg-emerald-500/15 text-emerald-500 border border-emerald-500/30"
                   : "border border-white/10 text-slate-400 hover:text-slate-200"
               )}
             >
@@ -289,9 +316,9 @@ export function SmsMarketplace({ onOrdered, onFeedback }: Props) {
               key={s.id}
               type="button"
               onClick={() => setSearch(s.name)}
-              className="flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-[#0c1018] px-3 py-2 text-xs text-slate-300 hover:border-cyan-500/30 hover:text-cyan-200 transition"
+              className="flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-[#0d1210] px-3 py-2 text-xs text-slate-300 hover:border-emerald-500/30 hover:text-emerald-400 transition"
             >
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-cyan-500/15 text-[10px] font-semibold text-cyan-300">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[10px] font-semibold text-emerald-500">
                 {serviceInitial(s.name)}
               </span>
               {s.name}
@@ -312,7 +339,10 @@ export function SmsMarketplace({ onOrdered, onFeedback }: Props) {
             </div>
           )}
           {filtered.map(entry => {
-            const unavailable = !entry.available || entry.count <= 0;
+            const countKnown = typeof entry.count === "number";
+            const unavailable =
+              countKnown && (!entry.available || entry.count <= 0);
+            const checking = !countKnown;
             return (
               <button
                 key={`${entry.serviceId}-${entry.countryCode}`}
@@ -320,13 +350,13 @@ export function SmsMarketplace({ onOrdered, onFeedback }: Props) {
                 disabled={unavailable}
                 onClick={() => setSelected(entry)}
                 className={cn(
-                  "group flex w-full min-h-[72px] items-center gap-3 rounded-xl border border-white/10 bg-[#0c1018] px-3 py-3 text-left transition sm:px-4",
+                  "group flex w-full min-h-[72px] items-center gap-3 rounded-xl border border-white/10 bg-[#0d1210] px-3 py-3 text-left transition sm:px-4",
                   unavailable
                     ? "opacity-50 cursor-not-allowed"
-                    : "hover:border-cyan-500/25 hover:bg-[#0e1420] active:scale-[0.995]"
+                    : "hover:border-emerald-500/25 hover:bg-[#121a15] active:scale-[0.995]"
                 )}
               >
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 text-sm font-semibold text-cyan-200">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-700/20 text-sm font-semibold text-emerald-400">
                   {serviceInitial(entry.serviceName)}
                 </span>
                 <div className="min-w-0 flex-1">
@@ -345,15 +375,17 @@ export function SmsMarketplace({ onOrdered, onFeedback }: Props) {
                       )}
                     >
                       <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                      {formatAvailabilityCount(entry.count)}
+                      {checking
+                        ? "Checking availability"
+                        : formatAvailabilityCount(entry.count)}
                     </span>
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <span className="text-sm font-semibold tabular-nums text-slate-100">
+                  <span className="text-sm font-semibold tabular-nums text-amber-400">
                     {formatNgnFromKobo(entry.retailPriceMinor)}
                   </span>
-                  <ChevronRight className="h-4 w-4 text-slate-600 group-hover:text-cyan-400" />
+                  <ChevronRight className="h-4 w-4 text-slate-600 group-hover:text-emerald-400" />
                 </div>
               </button>
             );
@@ -370,10 +402,10 @@ export function SmsMarketplace({ onOrdered, onFeedback }: Props) {
             aria-label="Close"
             onClick={() => setSelected(null)}
           />
-          <div className="relative z-10 w-full max-w-md rounded-t-2xl border border-white/10 bg-[#0c1018] p-5 sm:rounded-2xl safe-pb">
+          <div className="relative z-10 w-full max-w-md rounded-t-2xl border border-white/10 bg-[#0d1210] p-5 sm:rounded-2xl safe-pb">
             <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/15 sm:hidden" />
             <div className="flex items-start gap-3">
-              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-cyan-500/15 text-base font-semibold text-cyan-200">
+              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/15 text-base font-semibold text-emerald-400">
                 {serviceInitial(selected.serviceName)}
               </span>
               <div>
@@ -391,7 +423,7 @@ export function SmsMarketplace({ onOrdered, onFeedback }: Props) {
                 <p className="text-[10px] uppercase tracking-wide text-slate-500">
                   Price
                 </p>
-                <p className="mt-1 text-lg font-semibold text-slate-100 tabular-nums">
+                <p className="mt-1 text-lg font-semibold text-amber-400 tabular-nums">
                   {formatNgnFromKobo(selected.retailPriceMinor)}
                 </p>
               </div>
@@ -413,7 +445,7 @@ export function SmsMarketplace({ onOrdered, onFeedback }: Props) {
                 Cancel
               </Button>
               <Button
-                className="h-12 flex-1 bg-cyan-500 text-slate-950 hover:bg-cyan-400"
+                className="h-12 flex-1 bg-emerald-500 text-[#052e16] hover:bg-emerald-400"
                 disabled={
                   createSms.isPending ||
                   !selected.available ||

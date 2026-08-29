@@ -63,7 +63,7 @@ export function BrandLockup({
           <div className="truncate font-display text-[13px] font-semibold tracking-[0.14em] text-white">
             SUBBY VIRTUAL
           </div>
-          <div className="truncate text-[10px] tracking-[0.18em] text-cyan-400/80">
+          <div className="truncate text-[10px] tracking-[0.18em] text-emerald-400/80">
             CLOUD · AUTOMATE · SCALE
           </div>
         </div>

@@ -32,7 +32,7 @@ export function LocalAuthCard() {
   }
 
   return (
-    <Card className="w-full max-w-md border-white/[0.08] bg-[#10131c] shadow-[0_24px_60px_rgba(0,0,0,0.45)]">
+    <Card className="w-full max-w-md border-white/[0.08] bg-[#0d1210] shadow-[0_24px_60px_rgba(0,0,0,0.45)]">
       <CardHeader className="space-y-3 text-center">
         <div className="mx-auto w-full max-w-[220px]">
           <BrandLogo className="mx-auto h-auto max-h-28 w-full" priority />
@@ -110,7 +110,7 @@ export function LocalAuthCard() {
           <Button
             type="submit"
             disabled={isPending}
-            className="w-full bg-cyan-300 font-semibold text-slate-950 hover:bg-cyan-200"
+            className="w-full bg-emerald-500 font-semibold text-slate-950 hover:bg-emerald-400"
           >
             {isPending
               ? "Working…"
@@ -126,7 +126,7 @@ export function LocalAuthCard() {
             login.reset();
             signup.reset();
           }}
-          className="mt-4 w-full text-center text-sm text-cyan-300 hover:text-cyan-200"
+          className="mt-4 w-full text-center text-sm text-emerald-500 hover:text-emerald-400"
         >
           {mode === "login"
             ? "Need an account? Create one"

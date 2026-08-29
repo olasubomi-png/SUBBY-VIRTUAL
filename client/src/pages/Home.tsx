@@ -67,7 +67,7 @@ function Sidebar({
     <>
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex w-[260px] flex-col border-r border-white/[0.07] bg-[#0a0c12] px-5 py-6 transition-transform duration-200 lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 flex w-[260px] flex-col border-r border-white/[0.07] bg-[#0a0e0b] px-5 py-6 transition-transform duration-200 lg:translate-x-0",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -92,7 +92,7 @@ function Sidebar({
                   className={cn(
                     "group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium transition-all",
                     active === item.id
-                      ? "bg-cyan-400/10 text-cyan-200 shadow-[inset_2px_0_0_#67e8f9]"
+                      ? "bg-emerald-400/10 text-emerald-400 shadow-[inset_2px_0_0_#22c55e]"
                       : "text-slate-400 hover:bg-white/[0.04] hover:text-white"
                   )}
                 >
@@ -100,7 +100,7 @@ function Sidebar({
                     className={cn(
                       "h-[18px] w-[18px]",
                       active === item.id
-                        ? "text-cyan-300"
+                        ? "text-emerald-500"
                         : "text-slate-500 group-hover:text-slate-300"
                     )}
                   />
@@ -112,8 +112,8 @@ function Sidebar({
               );
             })}
         </nav>
-        <div className="mt-auto rounded-2xl border border-white/[0.08] bg-gradient-to-br from-indigo-500/10 to-cyan-400/5 p-4">
-          <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-cyan-200">
+        <div className="mt-auto rounded-2xl border border-white/[0.08] bg-gradient-to-br from-indigo-500/10 to-emerald-400/5 p-4">
+          <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-emerald-400">
             <Sparkles className="h-3.5 w-3.5" /> Phase 1 sandbox
           </div>
           <p className="text-xs leading-5 text-slate-400">
@@ -169,11 +169,11 @@ function Overview({ setActive }: { setActive: (id: string) => void }) {
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
           <p className="mb-2 text-sm text-slate-500">{dateLabel}</p>
-          <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">
+          <h1 className="text-3xl font-semibold tracking-tight text-amber-400 md:text-4xl">
             {displayName ? (
               <>
                 {timeGreeting},{" "}
-                <span className="text-cyan-300">{displayName}.</span>
+                <span className="text-emerald-500">{displayName}.</span>
               </>
             ) : (
               <>{timeGreeting}.</>
@@ -185,7 +185,7 @@ function Overview({ setActive }: { setActive: (id: string) => void }) {
         </div>
         <Button
           onClick={() => setActive("sms")}
-          className="h-11 rounded-xl bg-cyan-300 px-5 font-semibold text-slate-950 shadow-[0_0_25px_rgba(103,232,249,0.18)] hover:bg-cyan-200"
+          className="h-11 rounded-xl bg-emerald-500 px-5 font-semibold text-slate-950 shadow-[0_0_25px_rgba(103,232,249,0.18)] hover:bg-emerald-400"
         >
           <Plus className="mr-2 h-4 w-4" /> New request
         </Button>
@@ -214,7 +214,7 @@ function Overview({ setActive }: { setActive: (id: string) => void }) {
         />
       </div>
       <div className="grid gap-5 xl:grid-cols-[1.4fr_1fr]">
-        <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+        <Card className="border-white/[0.07] bg-[#0d1210] shadow-none">
           <CardHeader className="flex flex-row items-center justify-between pb-3">
             <div>
               <CardTitle className="text-base font-semibold text-white">
@@ -226,7 +226,7 @@ function Overview({ setActive }: { setActive: (id: string) => void }) {
             </div>
             <button
               onClick={() => setActive("activity")}
-              className="text-xs font-semibold text-cyan-300 hover:text-cyan-200"
+              className="text-xs font-semibold text-emerald-500 hover:text-emerald-400"
             >
               View all <ArrowUpRight className="ml-1 inline h-3.5 w-3.5" />
             </button>
@@ -241,7 +241,7 @@ function Overview({ setActive }: { setActive: (id: string) => void }) {
                   className={cn(
                     "grid h-10 w-10 place-items-center rounded-xl",
                     i === 0
-                      ? "bg-cyan-400/10 text-cyan-300"
+                      ? "bg-emerald-400/10 text-emerald-500"
                       : "bg-violet-400/10 text-violet-300"
                   )}
                 >
@@ -266,7 +266,7 @@ function Overview({ setActive }: { setActive: (id: string) => void }) {
             ))}
           </CardContent>
         </Card>
-        <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+        <Card className="border-white/[0.07] bg-[#0d1210] shadow-none">
           <CardHeader>
             <CardTitle className="text-base font-semibold text-white">
               Quick actions
@@ -297,9 +297,9 @@ function Overview({ setActive }: { setActive: (id: string) => void }) {
           </CardContent>
         </Card>
       </div>
-      <div className="rounded-2xl border border-cyan-300/10 bg-gradient-to-r from-cyan-400/[0.08] via-indigo-400/[0.05] to-transparent p-5 md:p-6">
+      <div className="rounded-2xl border border-emerald-500/10 bg-gradient-to-r from-emerald-400/[0.08] via-indigo-400/[0.05] to-transparent p-5 md:p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center">
-          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-cyan-300/10 text-cyan-300">
+          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-emerald-500/10 text-emerald-500">
             <ShieldCheck className="h-5 w-5" />
           </div>
           <div className="flex-1">
@@ -338,13 +338,13 @@ function Metric({
   accent: string;
 }) {
   return (
-    <Card className="group overflow-hidden border-white/[0.07] bg-[#10131c] shadow-none">
+    <Card className="group overflow-hidden border-white/[0.07] bg-[#0d1210] shadow-none">
       <CardContent className="relative p-5">
         <div
           className={cn(
             "mb-6 grid h-9 w-9 place-items-center rounded-lg",
             accent === "cyan"
-              ? "bg-cyan-300/10 text-cyan-300"
+              ? "bg-emerald-500/10 text-emerald-500"
               : accent === "violet"
                 ? "bg-violet-300/10 text-violet-300"
                 : "bg-emerald-300/10 text-emerald-300"
@@ -364,7 +364,7 @@ function Metric({
         >
           {detail}
         </p>
-        <div className="absolute -right-5 -top-5 h-20 w-20 rounded-full bg-cyan-300/[0.03] blur-2xl transition group-hover:bg-cyan-300/[0.08]" />
+        <div className="absolute -right-5 -top-5 h-20 w-20 rounded-full bg-emerald-500/[0.03] blur-2xl transition group-hover:bg-emerald-500/[0.08]" />
       </CardContent>
     </Card>
   );
@@ -383,9 +383,9 @@ function QuickAction({
   return (
     <button
       onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 text-left transition hover:border-cyan-300/20 hover:bg-cyan-300/[0.04]"
+      className="flex w-full items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 text-left transition hover:border-emerald-500/20 hover:bg-emerald-500/[0.04]"
     >
-      <div className="grid h-9 w-9 place-items-center rounded-lg bg-white/[0.05] text-cyan-300">
+      <div className="grid h-9 w-9 place-items-center rounded-lg bg-white/[0.05] text-emerald-500">
         <Icon className="h-4 w-4" />
       </div>
       <div className="flex-1">
@@ -505,16 +505,16 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
           </p>
         )}
         {selectedId && (smsDetail.isLoading || mailDetail.isLoading) && (
-          <p className="mt-3 text-xs text-cyan-200">Loading request details…</p>
+          <p className="mt-3 text-xs text-emerald-400">Loading request details…</p>
         )}
         {selectedId && (smsDetail.data || mailDetail.data) && (
-          <div className="mt-3 rounded-xl border border-cyan-300/15 bg-cyan-300/5 p-4 text-xs text-slate-300">
-            <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-cyan-200">
+          <div className="mt-3 rounded-xl border border-emerald-500/15 bg-emerald-500/5 p-4 text-xs text-slate-300">
+            <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-emerald-400">
               Request detail
             </p>
             <p>
               Selected {type === "sms" ? "activation" : "inbox"}:{" "}
-              <span className="font-mono text-cyan-200">{selectedId}</span>
+              <span className="font-mono text-emerald-400">{selectedId}</span>
             </p>
             <p className="mt-1">
               Created:{" "}
@@ -540,7 +540,7 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
         )}
       </div>
       <div className="grid gap-5 lg:grid-cols-[360px_1fr]">
-        <Card className="border-cyan-300/15 bg-[#10131c] shadow-none">
+        <Card className="border-emerald-500/15 bg-[#0d1210] shadow-none">
           <CardHeader>
             <CardTitle className="text-base text-white">
               {type === "sms" ? "Get a demo number" : "Create a demo inbox"}
@@ -564,13 +564,13 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
                   <input
                     value={label}
                     onChange={e => setLabel(e.target.value)}
-                    className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0a0c12] px-3 text-sm text-slate-200"
+                    className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0a0e0b] px-3 text-sm text-slate-200"
                   />
                 </label>
                 <Button
                   disabled={createMail.isPending}
                   onClick={() => createMail.mutate({ label })}
-                  className="h-11 w-full rounded-lg bg-cyan-300 font-semibold text-slate-950 hover:bg-cyan-200"
+                  className="h-11 w-full rounded-lg bg-emerald-500 font-semibold text-slate-950 hover:bg-emerald-400"
                 >
                   {createMail.isPending ? "Creating…" : "Create demo inbox"}
                 </Button>
@@ -578,7 +578,7 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
             )}
           </CardContent>
         </Card>
-        <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+        <Card className="border-white/[0.07] bg-[#0d1210] shadow-none">
           <CardHeader>
             <CardTitle className="text-base text-white">
               {type === "sms" ? "Your activations" : "Your demo inboxes"}
@@ -594,12 +594,12 @@ function RequestPage({ type }: { type: "sms" | "mail" }) {
                   className={cn(
                     "rounded-xl border border-white/[0.06] p-4",
                     selectedId === item.id &&
-                      "border-cyan-300/30 bg-cyan-300/[0.03]"
+                      "border-emerald-500/30 bg-emerald-500/[0.03]"
                   )}
                   onClick={() => setSelectedId(item.id)}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="grid h-10 w-10 place-items-center rounded-xl bg-cyan-300/10 text-cyan-300">
+                    <div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-500/10 text-emerald-500">
                       {type === "sms" ? (
                         <MessageSquareText className="h-4 w-4" />
                       ) : (
@@ -731,7 +731,7 @@ function Transactions() {
           A traceable view of wallet activity and request charges.
         </p>
       </div>
-      <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+      <Card className="border-white/[0.07] bg-[#0d1210] shadow-none">
         <CardHeader>
           <CardTitle className="text-base text-white">
             Transaction history
@@ -794,7 +794,7 @@ function LegacyTransactions() {
           A traceable view of wallet activity and request charges.
         </p>
       </div>
-      <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+      <Card className="border-white/[0.07] bg-[#0d1210] shadow-none">
         <CardHeader>
           <CardTitle className="text-base text-white">
             Transaction history
@@ -841,7 +841,7 @@ function jobStatusClass(status: string) {
   if (status === "COMPLETED") return "text-emerald-300 bg-emerald-300/10";
   if (status === "FAILED") return "text-rose-200 bg-rose-300/10";
   if (status === "CANCELLED") return "text-slate-400 bg-slate-400/10";
-  if (status === "PROCESSING") return "text-cyan-200 bg-cyan-300/10";
+  if (status === "PROCESSING") return "text-emerald-400 bg-emerald-500/10";
   return "text-amber-200 bg-amber-300/10";
 }
 
@@ -911,7 +911,7 @@ function Jobs() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+        <Card className="border-white/[0.07] bg-[#0d1210] shadow-none">
           <CardHeader>
             <CardTitle className="text-base text-white">
               Queue a mock SMS delivery
@@ -944,7 +944,7 @@ function Jobs() {
                       size="sm"
                       disabled={createJob.isPending}
                       onClick={() => queueJob("MOCK_SMS_DELIVERY", item.id)}
-                      className="shrink-0 bg-cyan-300 text-slate-950 hover:bg-cyan-200"
+                      className="shrink-0 bg-emerald-500 text-slate-950 hover:bg-emerald-400"
                     >
                       Queue
                     </Button>
@@ -957,7 +957,7 @@ function Jobs() {
             )}
           </CardContent>
         </Card>
-        <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+        <Card className="border-white/[0.07] bg-[#0d1210] shadow-none">
           <CardHeader>
             <CardTitle className="text-base text-white">
               Queue a demo email simulation
@@ -987,7 +987,7 @@ function Jobs() {
                       size="sm"
                       disabled={createJob.isPending}
                       onClick={() => queueJob("DEMO_EMAIL_SIMULATION", item.id)}
-                      className="shrink-0 bg-cyan-300 text-slate-950 hover:bg-cyan-200"
+                      className="shrink-0 bg-emerald-500 text-slate-950 hover:bg-emerald-400"
                     >
                       Queue
                     </Button>
@@ -1013,7 +1013,7 @@ function Jobs() {
         </p>
       )}
 
-      <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+      <Card className="border-white/[0.07] bg-[#0d1210] shadow-none">
         <CardHeader>
           <CardTitle className="text-base text-white">Your jobs</CardTitle>
           <p className="text-xs text-slate-500">
@@ -1056,7 +1056,7 @@ function Jobs() {
                   <div className="mt-4 flex items-center gap-3">
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
                       <div
-                        className="h-full rounded-full bg-cyan-300 transition-all"
+                        className="h-full rounded-full bg-emerald-500 transition-all"
                         style={{ width: `${job.progress}%` }}
                       />
                     </div>
@@ -1109,7 +1109,7 @@ function Jobs() {
       </Card>
 
       {selectedId && (
-        <Card className="border-cyan-300/15 bg-[#10131c] shadow-none">
+        <Card className="border-emerald-500/15 bg-[#0d1210] shadow-none">
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -1175,7 +1175,7 @@ function Jobs() {
                     <div className="space-y-3">
                       {activity.data.map(event => (
                         <div key={event.id} className="flex gap-3 text-xs">
-                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-300" />
+                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
                           <div>
                             <p className="text-slate-300">{event.eventType}</p>
                             <p className="mt-1 text-slate-600">
@@ -1328,7 +1328,7 @@ function Admin() {
           accent="emerald"
         />
       </div>
-      <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+      <Card className="border-white/[0.07] bg-[#0d1210] shadow-none">
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -1343,7 +1343,7 @@ function Admin() {
               size="sm"
               disabled={dispatchJobs.isPending}
               onClick={() => dispatchJobs.mutate({ limit: 10 })}
-              className="bg-cyan-300 text-slate-950 hover:bg-cyan-200"
+              className="bg-emerald-500 text-slate-950 hover:bg-emerald-400"
             >
               {dispatchJobs.isPending ? "Dispatching…" : "Run queued jobs"}
             </Button>
@@ -1385,7 +1385,7 @@ function Admin() {
                 </p>
                 <button
                   onClick={() => setAdminJobStatus("ALL")}
-                  className="text-xs text-cyan-200 hover:text-cyan-100"
+                  className="text-xs text-emerald-400 hover:text-emerald-300"
                 >
                   {adminJobStatus === "ALL"
                     ? "All statuses"
@@ -1416,7 +1416,7 @@ function Admin() {
                       </div>
                       <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/[0.06]">
                         <div
-                          className="h-full bg-cyan-300"
+                          className="h-full bg-emerald-500"
                           style={{ width: `${job.progress}%` }}
                         />
                       </div>
@@ -1459,7 +1459,7 @@ function Admin() {
           </div>
         </CardContent>
       </Card>
-      <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+      <Card className="border-white/[0.07] bg-[#0d1210] shadow-none">
         <CardHeader className="gap-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -1481,7 +1481,7 @@ function Admin() {
                 }}
                 placeholder="Search users"
                 aria-label="Search users by ID, name, or email"
-                className="h-10 w-full rounded-lg border border-white/10 bg-white/[0.04] pl-9 pr-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-300/50 focus:ring-2 focus:ring-cyan-300/10"
+                className="h-10 w-full rounded-lg border border-white/10 bg-white/[0.04] pl-9 pr-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/10"
               />
             </div>
           </div>
@@ -1518,7 +1518,7 @@ function Admin() {
                     <span className="truncate text-xs text-slate-400">
                       {user.email || "—"}
                     </span>
-                    <span className="text-xs text-cyan-200">{user.role}</span>
+                    <span className="text-xs text-emerald-400">{user.role}</span>
                     <span className="text-xs text-slate-300">
                       {user.status}
                     </span>
@@ -1578,7 +1578,7 @@ function Admin() {
         </CardContent>
       </Card>
       {selectedUserId !== null && (
-        <Card className="border-cyan-300/15 bg-[#10131c] shadow-none">
+        <Card className="border-emerald-500/15 bg-[#0d1210] shadow-none">
           <CardHeader className="flex-row items-start justify-between">
             <div>
               <CardTitle className="text-base text-white">
@@ -1620,7 +1620,7 @@ function Admin() {
                     </p>
                   </div>
                   <div className="flex gap-2 text-xs">
-                    <Badge className="bg-cyan-300/10 text-cyan-200">
+                    <Badge className="bg-emerald-500/10 text-emerald-400">
                       {userDetail.data.account.role}
                     </Badge>
                     <Badge className="bg-emerald-300/10 text-emerald-200">
@@ -1761,17 +1761,17 @@ function Admin() {
         {sections.map(([title, metric, detail]) => (
           <Card
             key={title}
-            className="border-white/[0.07] bg-[#10131c] shadow-none transition hover:border-cyan-300/20"
+            className="border-white/[0.07] bg-[#0d1210] shadow-none transition hover:border-emerald-500/20"
           >
             <CardContent className="p-5">
               <div className="flex items-start justify-between">
-                <div className="grid h-9 w-9 place-items-center rounded-lg bg-cyan-300/10 text-cyan-300">
+                <div className="grid h-9 w-9 place-items-center rounded-lg bg-emerald-500/10 text-emerald-500">
                   <ShieldCheck className="h-4 w-4" />
                 </div>
                 <ArrowUpRight className="h-4 w-4 text-slate-600" />
               </div>
               <h3 className="mt-5 text-sm font-semibold text-white">{title}</h3>
-              <p className="mt-2 text-xs font-medium text-cyan-200">{metric}</p>
+              <p className="mt-2 text-xs font-medium text-emerald-400">{metric}</p>
               <p className="mt-2 text-xs leading-5 text-slate-500">{detail}</p>
             </CardContent>
           </Card>
@@ -1844,9 +1844,9 @@ function Wallet() {
           Prices are live from the SMS catalog. Payments are verified server-side.
         </p>
       </div>
-      <Card className="border-cyan-300/20 bg-gradient-to-br from-cyan-400/10 to-[#10131c] shadow-none">
+      <Card className="border-emerald-500/20 bg-gradient-to-br from-emerald-400/10 to-[#0d1210] shadow-none">
         <CardContent className="p-6">
-          <p className="text-xs text-cyan-200/70">SUBBY Points balance</p>
+          <p className="text-xs text-emerald-400/70">SUBBY Points balance</p>
           <p className="mt-2 text-4xl font-semibold tracking-tight text-white">
             {(wallet.data?.points ?? wallet.data?.balanceMinor ?? 0).toLocaleString()}
           </p>
@@ -1854,14 +1854,14 @@ function Wallet() {
             Available for SMS activations and workspace services.
           </p>
           {paymentNotice && (
-            <p className="mt-4 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-cyan-100">
+            <p className="mt-4 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-emerald-300">
               {paymentNotice}
             </p>
           )}
         </CardContent>
       </Card>
 
-      <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+      <Card className="border-white/[0.07] bg-[#0d1210] shadow-none">
         <CardHeader>
           <CardTitle className="text-base text-white">Buy Points</CardTitle>
           <p className="mt-1 text-xs text-slate-500">
@@ -1878,8 +1878,8 @@ function Wallet() {
                 className={cn(
                   "rounded-lg border px-4 py-3 text-left transition",
                   selectedPackage === pkg.id
-                    ? "border-cyan-300/50 bg-cyan-400/10"
-                    : "border-white/10 bg-[#0a0c12] hover:border-white/20"
+                    ? "border-emerald-500/50 bg-emerald-400/10"
+                    : "border-white/10 bg-[#0a0e0b] hover:border-white/20"
                 )}
               >
                 <p className="text-sm font-medium text-white">{pkg.label}</p>
@@ -1903,7 +1903,7 @@ function Wallet() {
                 window.location.href = result.authorizationUrl;
               }
             }}
-            className="h-11 w-full rounded-lg bg-cyan-300 font-semibold text-slate-950 hover:bg-cyan-200"
+            className="h-11 w-full rounded-lg bg-emerald-500 font-semibold text-slate-950 hover:bg-emerald-400"
           >
             {initializeTopUp.isPending ? "Starting checkout…" : "Pay securely"}
           </Button>
@@ -1923,7 +1923,7 @@ function Wallet() {
         </CardContent>
       </Card>
 
-      <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+      <Card className="border-white/[0.07] bg-[#0d1210] shadow-none">
         <CardHeader>
           <CardTitle className="text-base text-white">Ledger</CardTitle>
           <p className="mt-1 text-xs text-slate-500">
@@ -1995,19 +1995,19 @@ function LegacyWallet() {
         </p>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="border-cyan-300/20 bg-gradient-to-br from-cyan-400/10 to-[#10131c] shadow-none">
+        <Card className="border-emerald-500/20 bg-gradient-to-br from-emerald-400/10 to-[#0d1210] shadow-none">
           <CardContent className="p-6">
-            <p className="text-xs text-cyan-200/70">NGN available balance</p>
+            <p className="text-xs text-emerald-400/70">NGN available balance</p>
             <p className="mt-2 text-4xl font-semibold tracking-tight text-white">
               ₦24,680.00
             </p>
-            <Button className="mt-6 rounded-lg bg-cyan-300 text-xs font-semibold text-slate-950 hover:bg-cyan-200">
+            <Button className="mt-6 rounded-lg bg-emerald-500 text-xs font-semibold text-slate-950 hover:bg-emerald-400">
               <Plus className="mr-2 h-3.5 w-3.5" /> Add funds{" "}
               <span className="ml-1 text-slate-700">(demo)</span>
             </Button>
           </CardContent>
         </Card>
-        <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+        <Card className="border-white/[0.07] bg-[#0d1210] shadow-none">
           <CardContent className="p-6">
             <p className="text-xs text-slate-500">USD architecture</p>
             <p className="mt-2 text-4xl font-semibold tracking-tight text-white">
@@ -2019,7 +2019,7 @@ function LegacyWallet() {
           </CardContent>
         </Card>
       </div>
-      <Card className="border-white/[0.07] bg-[#10131c] shadow-none">
+      <Card className="border-white/[0.07] bg-[#0d1210] shadow-none">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-base text-white">
@@ -2091,9 +2091,9 @@ export default function Home() {
   const title = nav.find(n => n.id === active)?.label ?? "Overview";
   if (loading) {
     return (
-      <div className="grid min-h-screen place-items-center bg-[#080a0f] p-6 text-slate-200">
+      <div className="grid min-h-screen place-items-center bg-[#080b09] p-6 text-slate-200">
         <div className="text-center">
-          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-cyan-300/30 border-t-cyan-300" />
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-emerald-500/30 border-t-emerald-500" />
           <p className="mt-4 text-sm text-slate-400">Checking your session…</p>
         </div>
       </div>
@@ -2101,10 +2101,10 @@ export default function Home() {
   }
   if (!user) {
     return (
-      <div className="grid min-h-screen place-items-center bg-[#080a0f] p-6 text-slate-200">
-        <Card className="w-full max-w-md border-white/[0.08] bg-[#10131c] shadow-2xl shadow-cyan-950/20">
+      <div className="grid min-h-screen place-items-center bg-[#080b09] p-6 text-slate-200">
+        <Card className="w-full max-w-md border-white/[0.08] bg-[#0d1210] shadow-2xl shadow-emerald-950/20">
           <CardHeader>
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-cyan-300 to-blue-500 text-sm font-black text-[#07101e]">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-emerald-500 to-blue-500 text-sm font-black text-[#07101e]">
               S
             </div>
             <CardTitle className="pt-4 text-xl text-white">
@@ -2122,7 +2122,7 @@ export default function Home() {
     );
   }
   return (
-    <div className="workspace-shell min-h-screen bg-[#080a0f] text-slate-200">
+    <div className="workspace-shell min-h-screen bg-[#080b09] text-slate-200">
       <Sidebar
         active={active}
         setActive={setActive}
@@ -2132,7 +2132,7 @@ export default function Home() {
         onSignOut={() => void logout()}
       />
       <div className="lg:pl-[260px]">
-        <header className="sticky top-0 z-20 flex h-[76px] items-center justify-between border-b border-white/[0.06] bg-[#080a0f]/90 px-5 backdrop-blur-xl md:px-10">
+        <header className="sticky top-0 z-20 flex h-[76px] items-center justify-between border-b border-white/[0.06] bg-[#080b09]/90 px-5 backdrop-blur-xl md:px-10">
           <div className="flex min-w-0 items-center gap-3">
             <button
               aria-label="Open navigation"
@@ -2152,7 +2152,7 @@ export default function Home() {
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_8px_#6ee7b7]" />{" "}
               All systems operational
             </div>
-            <div className="grid h-9 w-9 place-items-center rounded-full border border-cyan-300/20 bg-cyan-300/10 text-xs font-bold text-cyan-200">
+            <div className="grid h-9 w-9 place-items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 text-xs font-bold text-emerald-400">
               {user?.name?.slice(0, 1) ?? "O"}
             </div>
           </div>
@@ -2178,7 +2178,7 @@ export default function Home() {
             </div>
           ) : null}
           {active === "settings" && (
-            <div className="rounded-2xl border border-white/10 bg-[#10131c] p-8">
+            <div className="rounded-2xl border border-white/10 bg-[#0d1210] p-8">
               <h1 className="text-2xl font-semibold text-white">Settings</h1>
               <p className="mt-2 text-sm text-slate-400">
                 Account preferences and compliance controls will live here.
@@ -2186,7 +2186,7 @@ export default function Home() {
             </div>
           )}
           {active === "support" && (
-            <div className="rounded-2xl border border-white/10 bg-[#10131c] p-8">
+            <div className="rounded-2xl border border-white/10 bg-[#0d1210] p-8">
               <h1 className="text-2xl font-semibold text-white">Support</h1>
               <p className="mt-2 text-sm text-slate-400">
                 Need help with a mock delivery request? Open a support ticket

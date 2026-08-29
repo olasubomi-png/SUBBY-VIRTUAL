@@ -264,12 +264,14 @@ export async function buildExternalCatalog(
     }
     // Customer retail = provider cost + configured markup (integer ceil)
     const retailPriceMinor = applyMarkupBps(providerCostMinor, markupBps);
+    const count = Number.isFinite(row.count) ? Math.max(0, Math.floor(row.count)) : 0;
     entries.push({
       countryCode,
       countryName: resolveCountryName(countryCode),
       serviceId,
       serviceName: PROVIDER_SERVICE_LABELS[row.serviceCode] ?? serviceId,
-      available: row.count > 0,
+      available: count > 0,
+      count,
       providerCostMinor,
       retailPriceMinor,
       currency: "NGN",
