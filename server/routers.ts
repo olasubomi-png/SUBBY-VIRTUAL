@@ -37,9 +37,19 @@ import { providerRegistry } from "./providers";
 import {
   getCatalogCacheStatus,
   getCatalogSnapshot,
+  resolvePriceQuote,
   toPublicCatalog,
 } from "./smsCatalog";
-import { formatPoints, minorToPoints } from "./subbyPoints";
+import {
+  parseMarkupBps,
+  markupAmountMinor,
+  grossProfitMinor,
+} from "./smsPricing";
+import {
+  formatPoints,
+  minorToPoints,
+  retailKoboToPoints,
+} from "./subbyPoints";
 import {
   getTopUpStatusForUser,
   initializePointTopUp,
@@ -543,6 +553,43 @@ export const appRouter = router({
         // provider cost intentionally omitted from public response
       };
     }),
+    /** Authoritative price breakdown for one catalog row (no secrets). */
+    smsQuote: protectedProcedure
+      .input(
+        z.object({
+          country: z.string().min(2).max(3),
+          serviceId: z.string().min(2).max(40),
+        })
+      )
+      .query(async ({ input }) => {
+        const provider = sms();
+        const quote = await resolvePriceQuote(
+          provider,
+          input.country,
+          input.serviceId
+        );
+        const markupBps = parseMarkupBps(process.env.SMS_MARKUP_BPS);
+        const markup = markupAmountMinor(
+          quote.providerCostMinor,
+          quote.retailPriceMinor
+        );
+        return {
+          countryCode: quote.countryCode,
+          serviceId: quote.serviceId,
+          available: quote.available,
+          providerCostMinor: quote.providerCostMinor,
+          retailPriceMinor: quote.retailPriceMinor,
+          markupAmountMinor: markup,
+          markupBps,
+          grossProfitMinor: grossProfitMinor(
+            quote.providerCostMinor,
+            quote.retailPriceMinor
+          ),
+          currency: quote.currency,
+          pricingVersion: quote.pricingVersion,
+          pointsRequired: retailKoboToPoints(quote.retailPriceMinor),
+        };
+      }),
     createSmsRequest: protectedProcedure
       .input(
         z.object({

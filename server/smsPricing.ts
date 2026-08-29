@@ -5,9 +5,15 @@
 
 export type WalletCurrency = "NGN" | "USD";
 
-/** Markup in basis points (100 bps = 1%). Default 0 = pass-through. */
+/**
+ * Marketplace markup in basis points (100 bps = 1%).
+ * Default: 4800 = 48% — sellingPrice = providerCost × 1.48 (ceil).
+ * Override with SMS_MARKUP_BPS in the environment.
+ */
+export const DEFAULT_SMS_MARKUP_BPS = 4800 as const;
+
 export function parseMarkupBps(raw: string | undefined): number {
-  if (raw === undefined || raw.trim() === "") return 0;
+  if (raw === undefined || raw.trim() === "") return DEFAULT_SMS_MARKUP_BPS;
   const n = Number(raw);
   if (!Number.isInteger(n) || n < 0 || n > 100_000) {
     throw new Error(
@@ -16,6 +22,35 @@ export function parseMarkupBps(raw: string | undefined): number {
   }
   return n;
 }
+
+/** Gross markup amount in the same minor units as cost/retail (integer). */
+export function markupAmountMinor(
+  providerCostMinor: number,
+  retailPriceMinor: number
+): number {
+  if (
+    !Number.isSafeInteger(providerCostMinor) ||
+    !Number.isSafeInteger(retailPriceMinor) ||
+    providerCostMinor < 0 ||
+    retailPriceMinor < 0
+  ) {
+    throw new Error("Invalid pricing inputs");
+  }
+  const amount = retailPriceMinor - providerCostMinor;
+  if (amount < 0) {
+    throw new Error("Retail price cannot be below provider cost");
+  }
+  return amount;
+}
+
+/** Gross profit = customer price − provider cost (before payment fees). */
+export function grossProfitMinor(
+  providerCostMinor: number,
+  retailPriceMinor: number
+): number {
+  return markupAmountMinor(providerCostMinor, retailPriceMinor);
+}
+
 
 /**
  * FX rate: how many wallet minor units equal 1.00 of the provider major unit.

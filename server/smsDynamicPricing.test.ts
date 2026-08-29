@@ -22,7 +22,7 @@ afterEach(() => {
 
 describe("markup parsing", () => {
   it("accepts valid BPS values", () => {
-    expect(parseMarkupBps(undefined)).toBe(0);
+    expect(parseMarkupBps(undefined)).toBe(4800);
     expect(parseMarkupBps("0")).toBe(0);
     expect(parseMarkupBps("100")).toBe(100);
     expect(parseMarkupBps("1000")).toBe(1000);

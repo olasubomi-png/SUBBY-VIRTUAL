@@ -70,7 +70,7 @@ provider cost → NGN kobo → × (1 + SMS_MARKUP_BPS/10000) ceil → retail kob
 points charged = ceil(retailKobo / 50_000)
 ```
 
-`SMS_MARKUP_BPS` default 0 in code; set explicitly in production (e.g. 1000 = 10%).
+`SMS_MARKUP_BPS` default **4800 (48%)** in code. Override via environment if needed.
 
 Orders snapshot `quotedPriceMinor` (Points debited), `providerCostMinor`, `markupBps`, `pricingVersion` (`sms-live-v1-…`).
 
@@ -83,7 +83,7 @@ provider major cost
   → retail = cost × (10000 + SMS_MARKUP_BPS) / 10000 (ceil)
 ```
 
-- `SMS_MARKUP_BPS` — basis points (1000 = 10%). Default 0.
+- `SMS_MARKUP_BPS` — basis points (4800 = 48% marketplace default).
 - `SMS_FX_MINOR_PER_PROVIDER_MAJOR` — wallet minor units per 1.00 provider major (default 160000).
 - Ordinary users see **retail** only; provider cost is internal.
 - Each order snapshots `quotedPriceMinor`, `providerCostMinor`, `pricingVersion`, `markupBps`.
@@ -182,3 +182,22 @@ Optional: `SMS_PROVIDER_API_SECRET` (unused by SMS-Activate adapter).
 4. Switch `SMS_PROVIDER=external`.
 5. Restart the process; verify admin provider health.
 6. Never commit real API keys.
+
+
+## Activation lifecycle (wallet-first)
+
+SUBBY uses wallet Points (topped up via Paystack TEST) then allocates from the provider:
+
+```
+catalog available
+  → customer selects service/country
+  → server quotes retail (provider cost + SMS_MARKUP_BPS)
+  → atomic wallet debit (idempotent)
+  → pending → allocating → active
+  → poll / SMS_STATUS_POLL → code_received → completed
+```
+
+Terminal: `cancelled` | `expired` | `failed` (refund once on allocation failure).
+
+Paystack remains the top-up rail only — not switched to LIVE by this step.
+SMS purchases do not create a second Paystack charge; they spend wallet Points.

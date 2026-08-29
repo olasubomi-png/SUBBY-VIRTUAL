@@ -63,7 +63,7 @@ describe("mock catalog", () => {
       new MockSMSProvider(),
       "NG",
       "whatsapp",
-      { SMS_PROVIDER: "mock" }
+      { SMS_PROVIDER: "mock", SMS_MARKUP_BPS: "0" }
     );
     expect(quote.retailPriceMinor).toBe(30_000);
     expect(quote.available).toBe(true);

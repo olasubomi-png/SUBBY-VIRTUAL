@@ -84,6 +84,13 @@ export function SmsMarketplace({ onOrdered, onFeedback }: Props) {
   const smsOptions = trpc.workspace.smsOptions.useQuery(undefined, {
     refetchOnWindowFocus: false,
   });
+  const smsQuote = trpc.workspace.smsQuote.useQuery(
+    {
+      country: selected?.countryCode ?? "",
+      serviceId: selected?.serviceId ?? "",
+    },
+    { enabled: Boolean(selected?.countryCode && selected?.serviceId) }
+  );
   const createSms = trpc.workspace.createSmsRequest.useMutation({
     onSuccess: data => {
       onFeedback("Number allocated successfully.");
@@ -488,6 +495,31 @@ export function SmsMarketplace({ onOrdered, onFeedback }: Props) {
               </div>
             </div>
 
+            {smsQuote.data && (
+              <div className="mt-2.5 space-y-1.5 rounded-xl border border-white/10 bg-black/25 px-3 py-2.5 text-xs">
+                <div className="flex justify-between gap-2 text-slate-400">
+                  <span>Provider cost</span>
+                  <span className="tabular-nums text-slate-300">
+                    {formatNgnFromKobo(smsQuote.data.providerCostMinor)}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2 text-slate-400">
+                  <span>SUBBY markup ({(smsQuote.data.markupBps / 100).toFixed(0)}%)</span>
+                  <span className="tabular-nums text-slate-300">
+                    {formatNgnFromKobo(smsQuote.data.markupAmountMinor)}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2 border-t border-white/10 pt-1.5 font-medium text-slate-200">
+                  <span>Final price</span>
+                  <span className="tabular-nums text-amber-400">
+                    {formatNgnFromKobo(smsQuote.data.retailPriceMinor)}
+                    <span className="ml-1 font-normal text-slate-500">
+                      · {smsQuote.data.pointsRequired} pts
+                    </span>
+                  </span>
+                </div>
+              </div>
+            )}
             <div className="mt-2.5 rounded-xl border border-white/10 bg-black/25 px-3 py-2.5">
               <p className="text-[10px] uppercase tracking-wide text-slate-500">
                 Your balance

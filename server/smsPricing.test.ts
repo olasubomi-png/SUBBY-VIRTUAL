@@ -6,6 +6,7 @@ import {
   parseMarkupBps,
   providerCentsToWalletMinor,
   providerMajorToCents,
+  DEFAULT_SMS_MARKUP_BPS,
 } from "./smsPricing";
 
 describe("SMS pricing integer math", () => {
@@ -37,6 +38,12 @@ describe("SMS pricing integer math", () => {
     expect(applyMarkupBps(100, 1)).toBe(101); // ceil
   });
 
+  it("defaults marketplace markup to 48%", () => {
+    expect(DEFAULT_SMS_MARKUP_BPS).toBe(4800);
+    expect(parseMarkupBps(undefined)).toBe(4800);
+    expect(applyMarkupBps(10_000, DEFAULT_SMS_MARKUP_BPS)).toBe(14_800);
+  });
+
   it("computes full retail path", () => {
     const { providerCostMinor, retailPriceMinor } =
       computeRetailFromProviderMajor("0.25", 160_000, 1000);
@@ -45,7 +52,7 @@ describe("SMS pricing integer math", () => {
   });
 
   it("parses markup and fx config", () => {
-    expect(parseMarkupBps(undefined)).toBe(0);
+    expect(parseMarkupBps(undefined)).toBe(4800);
     expect(parseMarkupBps("500")).toBe(500);
     expect(() => parseMarkupBps("-1")).toThrow();
     expect(parseFxMinorPerProviderMajor("160000")).toBe(160_000);
