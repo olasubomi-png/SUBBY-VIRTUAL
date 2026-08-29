@@ -15,5 +15,14 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["server/**/*.test.ts", "server/**/*.spec.ts"],
+    setupFiles: [path.resolve(templateRoot, "server/test/setup.ts")],
+    // Baseline env for the worker process (does not replace setupFiles isolation)
+    env: {
+      SMS_PROVIDER: "mock",
+      SMS_PROVIDER_BASE_URL: "",
+      SMS_PROVIDER_API_KEY: "",
+      SMS_PROVIDER_API_SECRET: "",
+      SMS_MARKUP_BPS: "0",
+    },
   },
 });

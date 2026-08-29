@@ -105,6 +105,11 @@ export class ProviderRegistry {
 
 export const providerRegistry = new ProviderRegistry();
 
+/** Clear cached SMS provider instances (tests / config changes). */
+export function clearConfiguredSmsProviderCache(): void {
+  providerRegistry.clearSmsCache();
+}
+
 /** Convenience helper used by routers and order services. */
 export function getConfiguredSmsProvider(
   env: RuntimeEnv = process.env
