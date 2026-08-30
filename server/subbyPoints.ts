@@ -76,6 +76,17 @@ export function koboToPointsExact(kobo: number): number {
  * Always rounds up so SUBBY never undercharges.
  * ceil(retailKobo / 50_000)
  */
+/**
+ * Approximate package Points for UI (floor). Wallet truth is kobo.
+ * 70_000 kobo → 1 Point package-equivalent (not used for debits).
+ */
+export function koboToPackagePoints(kobo: number): number {
+  if (!Number.isSafeInteger(kobo) || kobo < 0) {
+    throw new Error("Invalid kobo amount");
+  }
+  return Math.floor(kobo / KOBO_PER_POINT);
+}
+
 export function retailKoboToPoints(retailKobo: number): number {
   if (!Number.isSafeInteger(retailKobo) || retailKobo <= 0) {
     throw new Error("Invalid retail price");

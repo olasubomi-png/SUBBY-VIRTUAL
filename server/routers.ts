@@ -49,6 +49,7 @@ import {
   formatPoints,
   minorToPoints,
   retailKoboToPoints,
+  koboToPackagePoints,
 } from "./subbyPoints";
 import {
   getTopUpStatusForUser,
@@ -943,7 +944,7 @@ export const appRouter = router({
               },
             }).catch(() => undefined);
             return {
-              points: minorToPoints(wallet.balanceMinor),
+              points: koboToPackagePoints(wallet.balanceMinor),
               direction: input.direction,
             };
           }
@@ -969,7 +970,7 @@ export const appRouter = router({
           },
         });
         return {
-          points: minorToPoints(wallet.balanceMinor),
+          points: koboToPackagePoints(wallet.balanceMinor),
           direction: input.direction,
         };
       }),
