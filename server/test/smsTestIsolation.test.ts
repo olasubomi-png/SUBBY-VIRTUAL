@@ -65,7 +65,7 @@ describe("SMS test environment isolation", () => {
   it("charges once under mock isolation (idempotency)", async () => {
     applyIsolatedSmsTestEnv();
     resetDemoState();
-    seedDemoCreditsForTests(501, 10, "seed-501");
+    seedDemoCreditsForTests(501, 100_000, "seed-501");
     const key = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
     const a = await createSmsOrder({
       userId: 501,

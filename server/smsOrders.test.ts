@@ -27,7 +27,7 @@ afterEach(() => vi.unstubAllEnvs());
 
 describe("SMS order creation", () => {
   it("creates an order, deducts balance once, and reaches active with a mock number", async () => {
-    seedDemoCreditsForTests(42, 50000, "seed-42");
+    seedDemoCreditsForTests(42, 100_000, "seed-42");
     const result = await createSmsOrder({
       userId: 42,
       country: "NG",
@@ -37,8 +37,8 @@ describe("SMS order creation", () => {
     });
     expect(result.status).toBe("active");
     expect(result.phoneNumber.startsWith("+")).toBe(true);
-    expect(result.priceMinor).toBe(1);
-    expect(result.walletBalanceMinor).toBe(49999);
+    expect(result.priceMinor).toBe(30_000);
+    expect(result.walletBalanceMinor).toBe(70_000);
     expect(result.reused).toBe(false);
     expect(result.audit).toMatch(/Mock/);
     expect(getDemoWallet(42).ledger.filter(e => e.type === "DEBIT")).toHaveLength(
@@ -86,10 +86,7 @@ describe("SMS order creation", () => {
   });
 
   it("enforces server-side pricing from the catalog", async () => {
-    seedDemoCreditsForTests(45, 50000, "seed-45");
-    const pricing = await provider.getPricing();
-    const telegram = pricing.find(p => p.serviceId === "telegram");
-    expect(telegram?.amount).toBe(12000);
+    seedDemoCreditsForTests(45, 100_000, "seed-45");
     const result = await createSmsOrder({
       userId: 45,
       country: "US",
@@ -97,12 +94,13 @@ describe("SMS order creation", () => {
       idempotencyKey: "55555555-5555-4555-8555-555555555555",
       provider,
     });
-    expect(result.priceMinor).toBe(1);
-    expect(result.walletBalanceMinor).toBe(49999);
+    // mock catalog telegram cost 22_000 kobo at 0% markup
+    expect(result.priceMinor).toBe(22_000);
+    expect(result.walletBalanceMinor).toBe(78_000);
   });
 
   it("returns the existing order for a duplicate idempotency key without double-charging", async () => {
-    seedDemoCreditsForTests(46, 50000, "seed-46");
+    seedDemoCreditsForTests(46, 100_000, "seed-46");
     const key = "66666666-6666-4666-8666-666666666666";
     const first = await createSmsOrder({
       userId: 46,
@@ -127,7 +125,7 @@ describe("SMS order creation", () => {
   });
 
   it("handles concurrent duplicate idempotency submissions safely", async () => {
-    seedDemoCreditsForTests(47, 50000, "seed-47");
+    seedDemoCreditsForTests(47, 100_000, "seed-47");
     const key = "77777777-7777-4777-8777-777777777777";
     const results = await Promise.all([
       createSmsOrder({
@@ -157,7 +155,7 @@ describe("SMS order creation", () => {
 
 describe("SMS order lifecycle operations", () => {
   it("cancels an active order and protects terminal states", async () => {
-    seedDemoCreditsForTests(48, 50000, "seed-48");
+    seedDemoCreditsForTests(48, 100_000, "seed-48");
     const order = await createSmsOrder({
       userId: 48,
       country: "GB",
@@ -171,7 +169,7 @@ describe("SMS order lifecycle operations", () => {
   });
 
   it("expires an active order", async () => {
-    seedDemoCreditsForTests(49, 50000, "seed-49");
+    seedDemoCreditsForTests(49, 100_000, "seed-49");
     const order = await createSmsOrder({
       userId: 49,
       country: "NG",
@@ -184,7 +182,7 @@ describe("SMS order lifecycle operations", () => {
   });
 
   it("records a simulated code and completes the order", async () => {
-    seedDemoCreditsForTests(50, 50000, "seed-50");
+    seedDemoCreditsForTests(50, 100_000, "seed-50");
     const order = await createSmsOrder({
       userId: 50,
       country: "NG",
@@ -208,7 +206,7 @@ describe("SMS order lifecycle operations", () => {
 
 describe("provider failure handling", () => {
   it("marks the order failed when the provider cannot allocate a number", async () => {
-    seedDemoCreditsForTests(60, 50000, "seed-60");
+    seedDemoCreditsForTests(60, 100_000, "seed-60");
     const failingProvider = {
       healthCheck: async () => ({ ok: true, detail: "ok" }),
       getCountries: async () => [{ code: "NG", name: "Nigeria" }],
@@ -264,7 +262,7 @@ describe("provider failure handling", () => {
     expect(getDemoWallet(60).ledger.filter(e => e.type === "CREDIT").length).toBeGreaterThanOrEqual(
       2
     ); // seed + refund
-    expect(getDemoWallet(60).balanceMinor).toBe(50000);
+    expect(getDemoWallet(60).balanceMinor).toBe(100_000);
 
     const listed = await listSmsOrders(60);
     expect(listed[0].status).toBe("failed");

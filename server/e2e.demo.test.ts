@@ -24,17 +24,17 @@ describe("Step 2 end-to-end demo flow", () => {
   it("funds, spends, completes SMS, and receives temporary mail safely", async () => {
     const caller = appRouter.createCaller(contextFor(7001));
     const credits = await caller.workspace.addDemoCredits({
-      amountMinor: 100000,
+      amountMinor: 100_000,
       requestId: "00000000-0000-4000-8000-000000000001",
     });
-    expect(credits.balanceMinor).toBe(100000);
+    expect(credits.balanceMinor).toBe(100_000);
     const activation = await caller.workspace.createSmsRequest({
       country: "NG",
       serviceId: "verify",
       idempotencyKey: "00000000-0000-4000-8000-000000000001",
     });
     expect(activation.status).toBe("active");
-    expect(activation.walletBalanceMinor).toBe(99999);
+    expect(activation.walletBalanceMinor).toBe(75_000);
     const smsJob = await caller.workspace.simulateSms({ id: activation.id });
     expect(smsJob.status).toBe("QUEUED");
     await dispatchQueuedJobs();
@@ -53,16 +53,16 @@ describe("Step 2 end-to-end demo flow", () => {
     const received = await caller.workspace.mailInboxDetail({ id: inbox.id });
     expect(received.messages).toHaveLength(1);
     const wallet = await caller.workspace.wallet();
-    expect(wallet.balanceMinor).toBe(99999);
+    expect(wallet.balanceMinor).toBe(75_000);
     const summary = await caller.workspace.summary();
-    expect(summary.balance.NGN).toBe(99999);
+    expect(summary.balance.NGN).toBe(75_000);
     expect(wallet.ledger.map(entry => entry.type)).toEqual(["DEBIT", "CREDIT"]);
   });
 
   it("enforces cancellation and expiry transitions", async () => {
     const caller = appRouter.createCaller(contextFor(7004));
     await caller.workspace.addDemoCredits({
-      amountMinor: 100000,
+      amountMinor: 100_000,
       requestId: "00000000-0000-4000-8000-000000000004",
     });
     const activation = await caller.workspace.createSmsRequest({
@@ -87,7 +87,7 @@ describe("Step 2 end-to-end demo flow", () => {
     const owner = appRouter.createCaller(contextFor(7002));
     const other = appRouter.createCaller(contextFor(7003));
     await owner.workspace.addDemoCredits({
-      amountMinor: 100000,
+      amountMinor: 100_000,
       requestId: "00000000-0000-4000-8000-000000000002",
     });
     const activation = await owner.workspace.createSmsRequest({
@@ -109,7 +109,7 @@ describe("duplicate simulation protection", () => {
   it("does not create duplicate fallback messages", async () => {
     const caller = appRouter.createCaller(contextFor(7010));
     await caller.workspace.addDemoCredits({
-      amountMinor: 100000,
+      amountMinor: 100_000,
       requestId: "00000000-0000-4000-8000-000000000010",
     });
     const activation = await caller.workspace.createSmsRequest({

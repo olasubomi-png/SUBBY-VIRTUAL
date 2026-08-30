@@ -10,7 +10,6 @@ import { resolvePriceQuote } from "./smsCatalog";
 import { parseMarkupBps } from "./smsPricing";
 import {
   SMS_LIVE_PRICING_VERSION,
-  retailKoboToPoints,
 } from "./subbyPoints";
 
 import { assertProviderCostAllowed } from "./smsProviderCostGuard";
@@ -113,8 +112,11 @@ async function createDemoOrder(input: CreateSmsOrderInput): Promise<{
     input.country,
     input.serviceId
   );
-  // Dynamic Points charge from live/mock retail (NGN kobo → ceil to Points)
-  const chargePoints = retailKoboToPoints(priceQuote.retailPriceMinor);
+  // Wallet unit is NGN kobo — debit the exact server retail price (no ceil-to-₦500).
+  const chargeKobo = priceQuote.retailPriceMinor;
+  if (!Number.isSafeInteger(chargeKobo) || chargeKobo <= 0) {
+    throw new Error("Invalid retail price");
+  }
   const currency = "NGN" as const;
   const markupBps = parseMarkupBps(process.env.SMS_MARKUP_BPS);
 
@@ -130,14 +132,14 @@ async function createDemoOrder(input: CreateSmsOrderInput): Promise<{
   }
 
   const wallet = getDemoWallet(input.userId);
-  if (wallet.balanceMinor < chargePoints) {
+  if (wallet.balanceMinor < chargeKobo) {
     throw new Error("Insufficient balance");
   }
 
   const debitRef = `sms-order-${input.userId}-${input.idempotencyKey}`;
   debitDemoCredits(
     input.userId,
-    chargePoints,
+    chargeKobo,
     `${priceQuote.serviceId} SMS activation`,
     debitRef
   );
@@ -146,7 +148,7 @@ async function createDemoOrder(input: CreateSmsOrderInput): Promise<{
     userId: input.userId,
     country: input.country,
     serviceId: input.serviceId,
-    priceMinor: chargePoints,
+    priceMinor: chargeKobo,
     currency,
     idempotencyKey: input.idempotencyKey,
     status: "pending",
@@ -178,7 +180,7 @@ async function createDemoOrder(input: CreateSmsOrderInput): Promise<{
     try {
       await refundSmsAllocation(
         input.userId,
-        chargePoints,
+        chargeKobo,
         input.idempotencyKey
       );
     } catch {
@@ -259,7 +261,7 @@ async function createPersistentOrder(input: CreateSmsOrderInput): Promise<{
     providerType: input.providerType ?? "MOCK",
     countryCode: input.country,
     serviceId: input.serviceId,
-    quotedPriceMinor: retailKoboToPoints(priceQuote.retailPriceMinor),
+    quotedPriceMinor: priceQuote.retailPriceMinor, // NGN kobo charged
     providerCostMinor: priceQuote.providerCostMinor,
     pricingVersion: priceQuote.pricingVersion || SMS_LIVE_PRICING_VERSION,
     markupBps: parseMarkupBps(process.env.SMS_MARKUP_BPS),
@@ -338,7 +340,7 @@ async function createPersistentOrder(input: CreateSmsOrderInput): Promise<{
     try {
       await refundSmsAllocation(
         input.userId,
-        retailKoboToPoints(priceQuote.retailPriceMinor),
+        priceQuote.retailPriceMinor,
         input.idempotencyKey
       );
     } catch {

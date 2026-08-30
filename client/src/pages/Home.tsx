@@ -1848,7 +1848,7 @@ function Wallet() {
         <CardContent className="p-6">
           <p className="text-xs text-emerald-400/70">SUBBY Points balance</p>
           <p className="mt-2 text-4xl font-semibold tracking-tight text-white">
-            {(wallet.data?.points ?? wallet.data?.balanceMinor ?? 0).toLocaleString()}
+            ₦{((wallet.data?.balanceMinor ?? 0) / 100).toLocaleString("en-US", { maximumFractionDigits: 0 })}
           </p>
           <p className="mt-2 text-sm text-slate-400">
             Available for SMS activations and workspace services.

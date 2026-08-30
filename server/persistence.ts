@@ -1906,11 +1906,17 @@ export async function completeVerifiedPointTopUp(input: {
       .from(walletLedgerEntries)
       .where(eq(walletLedgerEntries.reference, creditRef))
       .limit(1);
+    // Wallet ledger unit is NGN kobo. Credit the verified Paystack amount (kobo),
+    // not the package point count — so 2 Points (₦1000) credits 100_000 kobo.
+    const creditKobo = intent.amountMinor;
+    if (!Number.isSafeInteger(creditKobo) || creditKobo <= 0) {
+      throw new Error("Invalid top-up credit amount");
+    }
     if (!dup[0]) {
       await tx.insert(walletLedgerEntries).values({
         walletId: wallet.id,
         type: "CREDIT",
-        amountMinor: intent.points,
+        amountMinor: creditKobo,
         reason: "Point top-up",
         reference: creditRef,
       });
@@ -1931,7 +1937,7 @@ export async function completeVerifiedPointTopUp(input: {
 }
 
 
-/** Test/fixture only — completes a top-up and credits points once. */
+/** Test/fixture only — completes a top-up and credits wallet kobo once. */
 export async function completePointTopUpFixture(input: {
   userId: number;
   externalId: string;
@@ -1979,7 +1985,7 @@ export async function completePointTopUpFixture(input: {
       await tx.insert(walletLedgerEntries).values({
         walletId: wallet.id,
         type: "CREDIT",
-        amountMinor: intent.points,
+        amountMinor: intent.amountMinor, // NGN kobo
         reason: "Point top-up",
         reference: creditRef,
       });

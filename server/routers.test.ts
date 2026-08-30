@@ -67,7 +67,7 @@ describe("workspace authorization and validation", () => {
       ...base,
       user: { ...user, id: 99 },
     });
-    addDemoCredits(99, 100000, "router-rate-limit-seed");
+    addDemoCredits(99, 500_000, "router-rate-limit-seed");
     for (let attempt = 0; attempt < 5; attempt += 1)
       await caller.workspace.createSmsRequest({
         country: "NG",

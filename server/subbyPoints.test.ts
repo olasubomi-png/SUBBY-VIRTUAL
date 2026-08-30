@@ -81,7 +81,7 @@ describe("points debit and refund", () => {
   });
 
   it("SMS purchase debits Points derived from retail kobo", async () => {
-    seedDemoCreditsForTests(102, 50_000, "seed-102");
+    seedDemoCreditsForTests(102, 100_000, "seed-102");
     const result = await createSmsOrder({
       userId: 102,
       country: "NG",
@@ -89,12 +89,12 @@ describe("points debit and refund", () => {
       idempotencyKey: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
       provider: new MockSMSProvider(),
     });
-    expect(result.priceMinor).toBe(1);
-    expect(result.walletBalanceMinor).toBe(49_999);
+    expect(result.priceMinor).toBe(30_000);
+    expect(result.walletBalanceMinor).toBe(70_000);
   });
 
   it("allocation failure refunds points once", async () => {
-    seedDemoCreditsForTests(103, 50_000, "seed-103");
+    seedDemoCreditsForTests(103, 100_000, "seed-103");
     const failing = {
       healthCheck: async () => ({ ok: true, detail: "ok" }),
       getCountries: async () => [{ code: "NG", name: "Nigeria" }],
@@ -117,6 +117,6 @@ describe("points debit and refund", () => {
         provider: failing,
       })
     ).rejects.toThrow();
-    expect(getDemoWallet(103).balanceMinor).toBe(50_000);
+    expect(getDemoWallet(103).balanceMinor).toBe(100_000);
   });
 });

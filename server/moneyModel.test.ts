@@ -54,12 +54,12 @@ describe("SMS retail → points debit", () => {
 });
 
 describe("top-up then SMS economic path (demo wallet)", () => {
-  it("₦1000 (2 pts) top-up seeds then SMS debits expected points once", async () => {
-    // Simulate ₦1000 Paystack → 2 points credit
-    seedDemoCreditsForTests(9001, 2, "topup-1000");
-    expect(getDemoWallet(9001).balanceMinor).toBe(2);
+  it("₦1000 top-up (100_000 kobo) then SMS debits exact retail kobo once", async () => {
+    // Simulate ₦1000 Paystack → 100_000 kobo credit
+    seedDemoCreditsForTests(9001, 100_000, "topup-1000");
+    expect(getDemoWallet(9001).balanceMinor).toBe(100_000);
 
-    process.env.SMS_MARKUP_BPS = "0"; // deterministic mock retail 30_000 kobo → 1 pt
+    process.env.SMS_MARKUP_BPS = "0"; // mock whatsapp retail 30_000 kobo
     const order = await createSmsOrder({
       userId: 9001,
       country: "NG",
@@ -67,10 +67,9 @@ describe("top-up then SMS economic path (demo wallet)", () => {
       idempotencyKey: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
       provider: new MockSMSProvider(),
     });
-    expect(order.priceMinor).toBe(1);
-    expect(order.walletBalanceMinor).toBe(1);
+    expect(order.priceMinor).toBe(30_000);
+    expect(order.walletBalanceMinor).toBe(70_000);
 
-    // Idempotent replay
     const replay = await createSmsOrder({
       userId: 9001,
       country: "NG",
@@ -79,7 +78,7 @@ describe("top-up then SMS economic path (demo wallet)", () => {
       provider: new MockSMSProvider(),
     });
     expect(replay.reused).toBe(true);
-    expect(getDemoWallet(9001).balanceMinor).toBe(1);
+    expect(getDemoWallet(9001).balanceMinor).toBe(70_000);
   });
 });
 

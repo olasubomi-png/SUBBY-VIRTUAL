@@ -20,7 +20,7 @@ describe("SMS status poll job", () => {
   });
 
   it("queues a bounded status poll job", async () => {
-    seedDemoCreditsForTests(200, 10, "seed-200");
+    seedDemoCreditsForTests(200, 100_000, "seed-200");
     const order = await createSmsOrder({
       userId: 200,
       country: "NG",
@@ -34,7 +34,7 @@ describe("SMS status poll job", () => {
   });
 
   it("poll job completes or retries without throwing uncaught", async () => {
-    seedDemoCreditsForTests(201, 10, "seed-201");
+    seedDemoCreditsForTests(201, 100_000, "seed-201");
     const order = await createSmsOrder({
       userId: 201,
       country: "NG",

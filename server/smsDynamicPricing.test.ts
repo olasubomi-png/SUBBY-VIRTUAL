@@ -94,7 +94,7 @@ describe("dynamic external catalog prices", () => {
 
 describe("order pricing snapshot", () => {
   it("stores charge points and does not reprice after catalog change", async () => {
-    seedDemoCreditsForTests(300, 10, "seed-300");
+    seedDemoCreditsForTests(300, 100_000, "seed-300");
     const order = await createSmsOrder({
       userId: 300,
       country: "NG",
@@ -103,7 +103,7 @@ describe("order pricing snapshot", () => {
       provider: new MockSMSProvider(),
     });
     const storedPrice = order.priceMinor;
-    expect(storedPrice).toBe(retailKoboToPoints(30_000));
+    expect(storedPrice).toBe(30_000);
     const listed = listActivations(300);
     expect(listed[0].priceMinor).toBe(storedPrice);
   });

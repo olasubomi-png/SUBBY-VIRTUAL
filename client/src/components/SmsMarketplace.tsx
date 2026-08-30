@@ -193,7 +193,8 @@ export function SmsMarketplace({ onOrdered, onFeedback }: Props) {
   }, [entries, search, filter, countryFilter]);
 
   const shown = filtered.slice(0, visible);
-  const balancePoints = wallet.data?.balanceMinor ?? 0;
+  const balanceKobo = wallet.data?.balanceMinor ?? 0;
+  const balanceNgnMajor = Math.trunc(balanceKobo / 100);
   const healthOk =
     !smsOptions.isError && (entries.length > 0 || smsOptions.isLoading);
 
@@ -215,7 +216,7 @@ export function SmsMarketplace({ onOrdered, onFeedback }: Props) {
               Balance
             </p>
             <p className="text-sm font-semibold tabular-nums text-amber-400">
-              {balancePoints.toLocaleString("en-US")} pts
+              ₦{balanceNgnMajor.toLocaleString("en-US")}
             </p>
           </div>
         </div>
@@ -514,7 +515,7 @@ export function SmsMarketplace({ onOrdered, onFeedback }: Props) {
                   <span className="tabular-nums text-amber-400">
                     {formatNgnFromKobo(smsQuote.data.retailPriceMinor)}
                     <span className="ml-1 font-normal text-slate-500">
-                      · {smsQuote.data.pointsRequired} pts
+                      · exact charge
                     </span>
                   </span>
                 </div>
@@ -525,7 +526,7 @@ export function SmsMarketplace({ onOrdered, onFeedback }: Props) {
                 Your balance
               </p>
               <p className="mt-0.5 text-sm font-semibold tabular-nums text-amber-400">
-                {balancePoints.toLocaleString("en-US")} points
+                ₦{balanceNgnMajor.toLocaleString("en-US")}
               </p>
             </div>
 
