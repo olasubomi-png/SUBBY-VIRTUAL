@@ -641,7 +641,7 @@ export const appRouter = router({
               targetType: "smsActivation",
               targetId: result.id,
               metadata: {
-                mode: "mock",
+                mode: providerType,
                 country: input.country,
                 serviceId: input.serviceId,
               },
